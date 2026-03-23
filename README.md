@@ -95,6 +95,8 @@ MongoDB
 
 ## 📁 Project Structure
 
+
+```bash
 ExamPlatform
 ├── backend
 │   └── examplatform
@@ -147,38 +149,7 @@ ExamPlatform
 │   │   ├── api
 │   │   │   └── api.js
 │   │   ├── components
-│   │   │   ├── Navbar.jsx
-│   │   │   ├── QuestionCard.jsx
-│   │   │   ├── Snackbar.jsx
-│   │   │   ├── SubjectFab.jsx
-│   │   │   ├── LoadingSpinner.jsx
-│   │   │   └── PageTransition.jsx
-│   │   ├── context
-│   │   │   ├── ThemeContext.jsx
-│   │   │   └── SnackbarContext.jsx
-│   │   ├── data
-│   │   │   └── subjects.js
-│   │   ├── pages
-│   │   │   ├── Login.jsx
-│   │   │   ├── Register.jsx
-│   │   │   ├── Dashboard.jsx
-│   │   │   ├── SubjectTests.jsx
-│   │   │   ├── Quiz.jsx
-│   │   │   ├── Leaderboard.jsx
-│   │   │   ├── Results.jsx
-│   │   │   ├── TeacherDashboard.jsx
-│   │   │   ├── TeacherSubject.jsx
-│   │   │   ├── TeacherTestDetail.jsx
-│   │   │   ├── TeacherResults.jsx
-│   │   │   ├── TeacherStudentResults.jsx
-│   │   │   ├── AttemptHistory.jsx
-│   │   │   └── AttemptDetail.jsx
-│   │   ├── App.jsx
-│   │   ├── main.jsx
-│   │   ├── App.css
-│   │   └── index.css
-│   ├── package.json
-│   └── vite.config.js
+
 
 ---
 
