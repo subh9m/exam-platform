@@ -51,9 +51,14 @@ public class OtpService {
 
         otpRepo.save(otp);
 
-        // Let mail exceptions propagate so controller can return a clear API response.
-        emailService.sendOtp(email, purpose, code);
-        log.info("OTP email dispatched for purpose={} to={}", purpose, email);
+        // Fire-and-forget email dispatch so API request is never blocked on SMTP.
+        try {
+            emailService.sendOtpAsync(email, purpose, code);
+            log.info("OTP generated and async email queued for purpose={} to={}", purpose, email);
+        } catch (Exception ex) {
+            // Even async submission failures should not block OTP generation response.
+            log.error("OTP generated but async email enqueue failed for purpose={} to={}", purpose, email, ex);
+        }
     }
 
     public boolean verifyOtp(String email, String purpose, String code) {

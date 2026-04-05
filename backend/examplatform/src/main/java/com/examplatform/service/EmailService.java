@@ -4,6 +4,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.MailException;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,7 +22,8 @@ public class EmailService {
         this.mailSender = mailSender;
     }
 
-    public void sendOtp(String to, String purpose, String otp) {
+    @Async
+    public void sendOtpAsync(String to, String purpose, String otp) {
         SimpleMailMessage msg = new SimpleMailMessage();
         msg.setFrom(from);
         msg.setTo(to);
@@ -33,9 +35,9 @@ public class EmailService {
         );
         try {
             mailSender.send(msg);
+            log.info("OTP email sent to={} purpose={}", to, purpose);
         } catch (MailException ex) {
             log.error("Failed to send OTP email to={} purpose={} from={}", to, purpose, from, ex);
-            throw ex;
         }
     }
 }

@@ -5,7 +5,6 @@ import com.examplatform.model.User;
 import com.examplatform.security.JwtUtil;
 import com.examplatform.service.OtpService;
 import com.examplatform.service.UserService;
-import org.springframework.mail.MailException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -38,9 +37,7 @@ public class AuthController {
 
         try {
             otpService.issueOtp(email, "REGISTER");
-            return ResponseEntity.ok(Map.of("message", "OTP sent for registration"));
-        } catch (MailException ex) {
-            return ResponseEntity.status(502).body(Map.of("message", "Unable to send OTP email right now. Please try again."));
+            return ResponseEntity.ok(Map.of("message", "OTP generated"));
         } catch (IllegalStateException ex) {
             return ResponseEntity.status(429).body(Map.of("message", ex.getMessage()));
         }
@@ -92,9 +89,7 @@ public class AuthController {
 
         try {
             otpService.issueOtp(email, "LOGIN");
-            return ResponseEntity.ok(Map.of("message", "OTP sent to email"));
-        } catch (MailException ex) {
-            return ResponseEntity.status(502).body(Map.of("message", "Unable to send OTP email right now. Please try again."));
+            return ResponseEntity.ok(Map.of("message", "OTP generated"));
         } catch (IllegalStateException ex) {
             return ResponseEntity.status(429).body(Map.of("message", ex.getMessage()));
         }
