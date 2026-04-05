@@ -231,7 +231,7 @@ function Dashboard() {
                   </CardActions>
                 ) : (
                   <CardActions>
-                    <SecondaryButton whileTap={{ scale: 0.97 }} onClick={() => navigate(`/subject/${encodeURIComponent(subj.name)}/tests`)}>Attempt Exams</SecondaryButton>
+                    <SecondaryButton whileTap={{ scale: 0.97 }} onClick={() => navigate(`/subject/${encodeURIComponent(subj.name)}/tests`)}>Start Quiz</SecondaryButton>
                   </CardActions>
                 )}
               </SubjectCard>

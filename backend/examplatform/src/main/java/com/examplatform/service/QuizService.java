@@ -8,6 +8,8 @@ import com.examplatform.repository.QuestionRepository;
 import com.examplatform.repository.QuizResultRepository;
 import com.examplatform.repository.TestRepository;
 import com.examplatform.repository.UserRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -15,6 +17,8 @@ import java.util.*;
 
 @Service
 public class QuizService {
+
+    private static final Logger log = LoggerFactory.getLogger(QuizService.class);
 
     @Autowired
     private QuestionRepository questionRepository;
@@ -207,19 +211,94 @@ public class QuizService {
         throw new RuntimeException("testId is required for quiz submission");
     }
 
+    public int submitQuizDynamic(String userId, String subject, Map<String, String> answers, List<Map<String, Object>> selectedQuestions) {
+        if (userId == null || userId.isBlank()) {
+            throw new IllegalArgumentException("User not authenticated");
+        }
+        if (selectedQuestions == null || selectedQuestions.isEmpty()) {
+            throw new IllegalArgumentException("No questions submitted");
+        }
+        if (answers == null) {
+            throw new IllegalArgumentException("Invalid answers format");
+        }
+
+        log.info("submitQuizDynamic userId={}, subject={}, questions={}, answers={}",
+                userId, subject, selectedQuestions.size(), answers.size());
+
+        int scoreCount = 0;
+        for (Map<String, Object> question : selectedQuestions) {
+            String questionId = asString(question.get("id"));
+            String questionText = asString(question.get("questionText"));
+            String correctAnswer = asString(question.get("correctAnswer"));
+            String selected = answers.get(questionId);
+
+            // Backward-compatible answer format fallback: answers keyed by question text.
+            if ((selected == null || selected.isBlank()) && !questionText.isBlank()) {
+                selected = answers.get(questionText);
+            }
+
+            if (selected != null && !correctAnswer.isBlank() && selected.trim().equalsIgnoreCase(correctAnswer.trim())) {
+                scoreCount++;
+            }
+        }
+
+        QuizResult result = new QuizResult();
+        result.setUserId(userId);
+        result.setSubject(subject);
+        result.setTestId(null);
+        result.setTestName((subject == null ? "Subject" : subject.toUpperCase()) + " Pool");
+        result.setScore(scoreCount);
+        result.setTotalQuestions(selectedQuestions.size());
+        result.setAnswers(answers);
+        result.setQuestionSnapshot(buildSnapshotFromSubmittedQuestions(selectedQuestions));
+        result.setDateTaken(new Date());
+        quizResultRepository.save(result);
+
+        final int finalScore = scoreCount;
+        userRepository.findById(userId).ifPresent(user -> {
+            user.setTotalScore(user.getTotalScore() + finalScore);
+            userRepository.save(user);
+        });
+
+        return scoreCount;
+    }
+
     public int submitQuiz(String userId, String subject, String testId, Map<String, String> answers) {
+        if (userId == null || userId.isBlank()) {
+            throw new IllegalArgumentException("User not authenticated");
+        }
         if (testId == null || testId.isBlank()) {
-            throw new RuntimeException("testId is required for quiz submission");
+            throw new IllegalArgumentException("testId is required for quiz submission");
+        }
+        if (answers == null) {
+            throw new IllegalArgumentException("Invalid answers format");
         }
 
         List<Question> questions = questionRepository.findByTestId(testId);
-        Test test = testRepository.findById(testId).orElseThrow(() -> new RuntimeException("Test not found"));
+        if (questions == null || questions.isEmpty()) {
+            throw new IllegalArgumentException("No questions submitted");
+        }
+
+        Test test = testRepository.findById(testId)
+                .orElseThrow(() -> new IllegalArgumentException("Test not found"));
+
+        log.info("submitQuiz userId={}, testId={}, answers={}, questions={}",
+                userId, testId, answers.size(), questions.size());
+
         subject = test.getSubject();
         int scoreCount = 0;
 
         for (Question q : questions) {
-            String selected = answers.get(q.getId());
-            if (selected != null && selected.trim().equalsIgnoreCase(q.getCorrectAnswer().trim())) {
+            String questionId = q == null ? "" : asString(q.getId());
+            String questionText = q == null ? "" : asString(q.getQuestionText());
+            String selected = answers.get(questionId);
+
+            if ((selected == null || selected.isBlank()) && !questionText.isBlank()) {
+                selected = answers.get(questionText);
+            }
+
+            String correct = q == null ? "" : asString(q.getCorrectAnswer());
+            if (selected != null && !correct.isBlank() && selected.trim().equalsIgnoreCase(correct.trim())) {
                 scoreCount++;
             }
         }
@@ -233,6 +312,7 @@ public class QuizService {
         result.setScore(scoreCount);
         result.setTotalQuestions(questions.size());
         result.setAnswers(answers);
+        result.setQuestionSnapshot(buildSnapshotFromQuestions(questions));
         result.setDateTaken(new Date());
         quizResultRepository.save(result);
 
@@ -329,5 +409,42 @@ public class QuizService {
 
         payload.sort((a, b) -> ((Date) b.get("dateTaken")).compareTo((Date) a.get("dateTaken")));
         return payload;
+    }
+
+    private List<Map<String, Object>> buildSnapshotFromQuestions(List<Question> questions) {
+        List<Map<String, Object>> snapshot = new ArrayList<>();
+        for (Question question : questions) {
+            Map<String, Object> row = new HashMap<>();
+            row.put("id", question.getId());
+            row.put("questionText", question.getQuestionText());
+            row.put("correctAnswer", question.getCorrectAnswer());
+            row.put("options", question.getOptions());
+            snapshot.add(row);
+        }
+        return snapshot;
+    }
+
+    private List<Map<String, Object>> buildSnapshotFromSubmittedQuestions(List<Map<String, Object>> selectedQuestions) {
+        List<Map<String, Object>> snapshot = new ArrayList<>();
+        for (Map<String, Object> question : selectedQuestions) {
+            Map<String, Object> row = new HashMap<>();
+            row.put("id", asString(question.get("id")));
+            row.put("questionText", asString(question.get("questionText")));
+            row.put("correctAnswer", asString(question.get("correctAnswer")));
+
+            Object options = question.get("options");
+            if (options instanceof List<?>) {
+                row.put("options", new ArrayList<>((List<?>) options));
+            } else {
+                row.put("options", List.of());
+            }
+
+            snapshot.add(row);
+        }
+        return snapshot;
+    }
+
+    private String asString(Object value) {
+        return value == null ? "" : String.valueOf(value);
     }
 }

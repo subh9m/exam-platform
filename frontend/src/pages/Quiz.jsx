@@ -1,28 +1,20 @@
-// src/pages/Quiz.jsx
-import React, {
-  useEffect,
-  useState,
-  useRef,
-  useCallback,
-} from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import React, { useEffect, useState, useRef, useCallback } from "react";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import styled, { useTheme } from "styled-components";
 import api from "../api/api.js";
 import QuestionCard from "../components/QuestionCard.jsx";
 import Navbar from "../components/Navbar.jsx";
 import { useSnackbar } from "../context/SnackbarContext.jsx";
 
-// --- Helper Function ---
 function resolveQuestionId(q, idx) {
   if (!q) return String(idx);
   if (typeof q.id === "string") return q.id;
   if (typeof q._id === "string") return q._id;
-  if (q._id && typeof q._id === "object" && typeof q._id.$oid === "string")
+  if (q._id && typeof q._id === "object" && typeof q._id.$oid === "string") {
     return q._id.$oid;
+  }
   return String(idx);
 }
-
-// --- Styled Components (theme-driven) ---
 
 const PageContainer = styled.div`
   min-height: 100vh;
@@ -61,11 +53,7 @@ const ProgressBarContainer = styled.div`
 const ProgressBarFill = styled.div`
   height: 100%;
   width: ${(props) => props.$percent}%;
-  background: linear-gradient(
-    90deg,
-    ${({ theme }) => theme.accent},
-    ${({ theme }) => theme.score}
-  );
+  background: linear-gradient(90deg, ${({ theme }) => theme.accent}, ${({ theme }) => theme.score});
   transition: width 0.4s cubic-bezier(0.2, 1, 0.3, 1);
 `;
 
@@ -103,11 +91,7 @@ const ButtonContainer = styled.div`
 const PrimaryButton = styled.button`
   padding: 12px 20px;
   border-radius: 12px;
-  background: linear-gradient(
-    90deg,
-    ${({ theme }) => theme.accent},
-    ${({ theme }) => theme.score}
-  );
+  background: linear-gradient(90deg, ${({ theme }) => theme.accent}, ${({ theme }) => theme.score});
   color: #fff;
   font-size: 16px;
   font-weight: 600;
@@ -120,6 +104,7 @@ const PrimaryButton = styled.button`
     transform: translateY(-4px) scale(1.02);
     box-shadow: 0 15px 35px ${({ theme }) => theme.accent + "33"};
   }
+
   &:active {
     transform: translateY(-1px) scale(0.98);
   }
@@ -141,14 +126,8 @@ const SecondaryButton = styled(PrimaryButton)`
   &:hover {
     background: ${({ theme }) => theme.accent + "22"};
   }
-
-  &:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
 `;
 
-// --- Modal ---
 const ModalBackdrop = styled.div`
   position: fixed;
   inset: 0;
@@ -197,253 +176,274 @@ const TimerBar = styled.div`
   letter-spacing: 1px;
 `;
 
-// --- Main Component ---
 function Quiz() {
   const theme = useTheme();
+  const location = useLocation();
   const { showSnackbar } = useSnackbar();
   const { subject } = useParams();
   const navigate = useNavigate();
-  const testId = new URLSearchParams(window.location.search).get("testId");
+
+  const query = new URLSearchParams(location.search);
+  const testId = query.get("testId");
+  const selectionId = query.get("selectionId");
 
   const [questions, setQuestions] = useState([]);
   const [answers, setAnswers] = useState({});
   const [submitted, setSubmitted] = useState(false);
   const [score, setScore] = useState(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [isStarted, setIsStarted] = useState(false); // For fullscreen proctoring
+  const [isStarted, setIsStarted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const hasAutoSubmittedRef = useRef(false);
 
-  const user =
-    typeof window !== "undefined"
-      ? JSON.parse(localStorage.getItem("user") || "null")
-      : null;
+  const user = typeof window !== "undefined" ? JSON.parse(localStorage.getItem("user") || "null") : null;
 
+  const testKey = testId || `pool-${selectionId || "default"}`;
   const storageKey = user
-    ? `quiz-${user.id ?? user._id}-${subject}-${testId || "missing-test"}`
-    : `quiz-guest-${subject}-${testId || "missing-test"}`;
+    ? `quiz-${user.id ?? user._id}-${subject}-${testKey}`
+    : `quiz-guest-${subject}-${testKey}`;
 
-  // --- Timer (2 minutes default) ---
-  const DEFAULT_TIME = 2 * 60; // 2 minutes
-  const [timeLeft, setTimeLeft] = useState(() => {
-    return Number(localStorage.getItem(`${storageKey}-timeLeft`)) || DEFAULT_TIME;
-  });
+  const DEFAULT_TIME = 2 * 60;
+  const [timeLeft, setTimeLeft] = useState(() => Number(localStorage.getItem(`${storageKey}-timeLeft`)) || DEFAULT_TIME);
 
   const answersRef = useRef(answers);
   useEffect(() => {
     answersRef.current = answers;
   }, [answers]);
 
-  // --- Fetch Questions + Resume ---
   useEffect(() => {
-    if (!testId) {
-      showSnackbar("Please select a test first.", "info");
-      navigate("/dashboard");
-      return;
-    }
-
-    const fetchQuestions = async () => {
-      try {
-        const res = await api.get(`/tests/${testId}/questions`);
-        const data = Array.isArray(res.data) ? res.data : [];
-        setQuestions(data);
-
-        const saved = localStorage.getItem(storageKey);
-        if (saved) {
-          // Don't show resume message if test hasn't started
-          // showSnackbar("Resuming your last progress 🚀");
-          try {
-            setAnswers(JSON.parse(saved));
-          } catch {
-            localStorage.removeItem(storageKey);
-          }
+    const loadQuestions = async () => {
+      if (testId) {
+        try {
+          const res = await api.get(`/tests/${testId}/questions`);
+          setQuestions(Array.isArray(res.data) ? res.data : []);
+        } catch {
+          showSnackbar("Unable to load questions right now.", "error");
+          setQuestions([]);
         }
-      } catch {
-        showSnackbar("Unable to load questions right now.", "error");
+        return;
       }
-    };
-    fetchQuestions();
-  }, [subject, storageKey, showSnackbar, testId, navigate]);
 
-  // --- Autosave every 30s ---
+      const fromState = Array.isArray(location.state?.selectedQuestions) ? location.state.selectedQuestions : [];
+      if (fromState.length > 0) {
+        setQuestions(fromState);
+        return;
+      }
+
+      if (selectionId) {
+        try {
+          const raw = sessionStorage.getItem(`quiz-selection-${selectionId}`);
+          const parsed = raw ? JSON.parse(raw) : [];
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setQuestions(parsed);
+            return;
+          }
+        } catch {
+          // no-op
+        }
+      }
+
+      showSnackbar("Please configure your quiz first.", "info");
+      navigate(`/subject/${encodeURIComponent(subject || "")}/tests`);
+    };
+
+    loadQuestions();
+  }, [location.state, navigate, selectionId, showSnackbar, subject, testId]);
+
   useEffect(() => {
-    // Only autosave if the quiz has started and is not submitted
+    const saved = localStorage.getItem(storageKey);
+    if (!saved) return;
+
+    try {
+      setAnswers(JSON.parse(saved));
+    } catch {
+      localStorage.removeItem(storageKey);
+    }
+  }, [storageKey]);
+
+  useEffect(() => {
     if (!isStarted || submitted) return;
 
     const id = setInterval(() => {
-      if (Object.keys(answersRef.current).length > 0)
+      if (Object.keys(answersRef.current).length > 0) {
         localStorage.setItem(storageKey, JSON.stringify(answersRef.current));
+      }
     }, 30000);
+
     return () => clearInterval(id);
-  }, [storageKey, isStarted, submitted]);
+  }, [isStarted, storageKey, submitted]);
 
   const handleSelect = (qId, option) => {
-    setAnswers((prev) => ({ ...prev, [qId]: option }));
-    localStorage.setItem(storageKey, JSON.stringify({ ...answers, [qId]: option }));
+    setAnswers((prev) => {
+      const next = { ...prev, [qId]: option };
+      localStorage.setItem(storageKey, JSON.stringify(next));
+      return next;
+    });
   };
 
   const handleSave = (qId, option) => {
     localStorage.setItem(storageKey, JSON.stringify({ ...answers, [qId]: option }));
   };
 
-  // --- Stable Submit Handler ---
   const handleConfirmSubmit = useCallback(async () => {
-    // Prevent multiple submissions
     if (submitted || submitting) return;
 
     setShowConfirmModal(false);
     setSubmitting(true);
-    setSubmitted(true); // Set submitted true immediately
+    setSubmitted(true);
 
-    // Exit fullscreen if still in it
     if (document.fullscreenElement) {
       document.exitFullscreen();
     }
 
     try {
+      const resolvedUserId = user?.id ?? user?._id ?? user?.userId ?? "";
+      if (!resolvedUserId) {
+        showSnackbar("Session expired. Please login again.", "error");
+        setSubmitted(false);
+        setSubmitting(false);
+        navigate("/");
+        return;
+      }
+
       const payload = {
-        userId: user.id ?? user._id,
+        userId: resolvedUserId,
         subject,
-        testId,
-        answers: answersRef.current, // Use the ref for stable access
+        answers: answersRef.current,
       };
+
+      if (testId) {
+        payload.testId = testId;
+      } else {
+        payload.questions = questions.map((q, idx) => ({
+          id: resolveQuestionId(q, idx),
+          questionText: q.questionText || "",
+          options: Array.isArray(q.options) ? q.options : [],
+          correctAnswer: q.correctAnswer || "",
+        }));
+      }
+
       const res = await api.post("/quiz/submit", payload);
       setScore(res.data.score ?? 0);
 
-      // ✅ Clear saved quiz answers & timer
       localStorage.removeItem(storageKey);
       localStorage.removeItem(`${storageKey}-timeLeft`);
+      if (selectionId) {
+        sessionStorage.removeItem(`quiz-selection-${selectionId}`);
+      }
 
       showSnackbar("Test submitted successfully.", "success");
-    } catch {
-      showSnackbar("Test submission failed. Please try again.", "error");
+    } catch (err) {
+      const serverMessage = err?.response?.data?.error || err?.response?.data?.message;
+      showSnackbar(serverMessage || "Test submission failed. Please try again.", "error");
       setSubmitted(false);
     } finally {
       setSubmitting(false);
     }
-  }, [user, subject, storageKey, showSnackbar, submitted, submitting, testId]); // Add 'submitted'
+  }, [navigate, questions, selectionId, showSnackbar, storageKey, subject, submitted, submitting, testId, user]);
 
-  // --- Stable handleSubmit (for manual button click) ---
   const handleSubmit = useCallback(() => {
     if (!user) {
       showSnackbar("Please login to submit the test.", "info");
       navigate("/");
       return;
     }
+
     const allIds = questions.map((q, i) => resolveQuestionId(q, i));
     const firstUnanswered = allIds.find((id) => !answers[id]);
+
     if (firstUnanswered) {
-      document.getElementById(firstUnanswered)?.scrollIntoView({
-        behavior: "smooth",
-        block: "center",
-      });
+      document.getElementById(firstUnanswered)?.scrollIntoView({ behavior: "smooth", block: "center" });
       showSnackbar("Please answer all questions before submitting.", "info");
       return;
     }
+
     setShowConfirmModal(true);
-  }, [user, showSnackbar, navigate, questions, answers]);
+  }, [answers, navigate, questions, showSnackbar, user]);
 
   const handleSaveAll = () => {
     localStorage.setItem(storageKey, JSON.stringify(answers));
     showSnackbar("Progress saved locally.", "info");
   };
 
-  // --- Handle Start Quiz (for fullscreen) ---
   const handleStartQuiz = () => {
-    // Request fullscreen
-    document.documentElement.requestFullscreen().catch((err) => {
-      console.warn(`Fullscreen request failed: ${err.message}`);
-      // Still start quiz even if fullscreen fails,
-      // the fullscreenchange listener will catch exits if it *does* work
+    document.documentElement.requestFullscreen().catch(() => {
+      // fullscreen can fail on some browsers without breaking flow
     });
-    
-    // Show resume message now
+
     if (localStorage.getItem(storageKey)) {
       showSnackbar("Resuming your previous progress.", "info");
     }
-    
-    // Start the quiz
+
     setIsStarted(true);
   };
 
-  // --- Proctoring Effect (Detects Cheating) ---
   useEffect(() => {
-    // Only run this "proctoring" if the quiz is started and not submitted
-    if (!isStarted || submitted) {
-      return;
-    }
+    if (!isStarted || submitted) return;
 
-    // Handler for tab switching
+    const submitOnViolation = () => {
+      if (hasAutoSubmittedRef.current) return;
+      hasAutoSubmittedRef.current = true;
+      showSnackbar("Test auto-submitted due to rule violation", "error");
+      handleConfirmSubmit();
+    };
+
     const handleVisibilityChange = () => {
-      if (document.visibilityState === "hidden") {
-        showSnackbar("Tab switch detected. Auto-submitting test.", "error");
-        handleConfirmSubmit(); // Submit immediately
+      if (document.hidden) {
+        submitOnViolation();
       }
     };
 
-    // Handler for exiting fullscreen
     const handleFullscreenChange = () => {
       if (!document.fullscreenElement) {
-        showSnackbar("Fullscreen exited. Auto-submitting test.", "error");
-        handleConfirmSubmit(); // Submit immediately
+        submitOnViolation();
       }
     };
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
     document.addEventListener("fullscreenchange", handleFullscreenChange);
 
-    // Cleanup function
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       document.removeEventListener("fullscreenchange", handleFullscreenChange);
     };
-  }, [isStarted, submitted, handleConfirmSubmit, showSnackbar]);
+  }, [handleConfirmSubmit, isStarted, showSnackbar, submitted]);
 
-  // --- FIXED: Timer countdown effect & auto-submit ---
   useEffect(() => {
-    // Don't run the timer if the quiz is not started or already submitted
-    if (submitted || !isStarted) {
-      return;
-    }
+    if (submitted || !isStarted) return;
 
-    // Set up the interval
     const interval = setInterval(() => {
       setTimeLeft((prevTime) => {
-        // Check if time is about to run out
         if (prevTime <= 1) {
-          clearInterval(interval); // Stop the timer
+          clearInterval(interval);
           showSnackbar("Time is up. Submitting your test.", "info");
-          handleConfirmSubmit(); // Call the stable auto-submit function
-          return 0; // Set final time to 0
+          handleConfirmSubmit();
+          return 0;
         }
-        // Otherwise, just decrement
         return prevTime - 1;
       });
     }, 1000);
 
-    // Cleanup function to clear the interval on unmount
     return () => clearInterval(interval);
-  }, [submitted, isStarted, handleConfirmSubmit, showSnackbar]); // Added showSnackbar
+  }, [handleConfirmSubmit, isStarted, showSnackbar, submitted]);
 
-  // Save timer to localStorage
   useEffect(() => {
-    // Don't save the timer if it's 0 or the quiz is not started/submitted
     if (timeLeft > 0 && isStarted && !submitted) {
       localStorage.setItem(`${storageKey}-timeLeft`, timeLeft);
     }
-  }, [timeLeft, isStarted, submitted, storageKey]);
+  }, [isStarted, storageKey, submitted, timeLeft]);
 
-  // --- Progress ---
   const answeredCount = Object.keys(answers).length;
   const total = questions.length;
   const progress = total ? (answeredCount / total) * 100 : 0;
+
   const formatTime = (sec) => {
     const m = Math.floor(sec / 60);
     const s = sec % 60;
     return `${m}:${s < 10 ? "0" : ""}${s}`;
   };
 
-  // --- Conditional Renders ---
-  if (total === 0 && !submitted) // Keep showing loading if submitted
+  if (total === 0 && !submitted) {
     return (
       <PageContainer>
         <Navbar />
@@ -452,99 +452,71 @@ function Quiz() {
         </ContentContainer>
       </PageContainer>
     );
+  }
 
-  if (submitted)
+  if (submitted) {
     return (
       <PageContainer>
-        <Navbar /> {/* <-- Navbar is OK on the score page */}
+        <Navbar />
         <ContentContainer style={{ textAlign: "center" }}>
           <ScoreDisplay>
-            Your Score:{" "}
-            <span>
-              {score ?? "Calculating"} / {total}
-            </span>
+            Your Score: <span>{score ?? "Calculating"} / {total}</span>
           </ScoreDisplay>
           <ButtonContainer>
-            <SecondaryButton onClick={() => navigate("/dashboard")}>
-              Back to Dashboard
-            </SecondaryButton>
-            <SecondaryButton onClick={() => navigate(testId ? `/leaderboard?testId=${testId}` : "/leaderboard") }>
-              View Leaderboard
-            </SecondaryButton>
+            <SecondaryButton onClick={() => navigate("/dashboard")}>Back to Dashboard</SecondaryButton>
+            <SecondaryButton onClick={() => navigate(testId ? `/leaderboard?testId=${testId}` : "/leaderboard")}>View Leaderboard</SecondaryButton>
           </ButtonContainer>
         </ContentContainer>
       </PageContainer>
     );
+  }
 
-  // --- NEW: Start Quiz Screen ---
-  if (!isStarted)
+  if (!isStarted) {
     return (
       <PageContainer>
-        <Navbar /> {/* <-- Navbar is OK here */}
+        <Navbar />
         <ContentContainer style={{ textAlign: "center", paddingTop: "40px" }}>
-          <Header>Quiz: {subject.toUpperCase()}</Header>
-          <SubHeader style={{ fontSize: "16px" }}>
-            Total Questions: {total}
-          </SubHeader>
-          <SubHeader style={{ fontSize: "16px" }}>
-            Time Limit: {formatTime(DEFAULT_TIME)}
-          </SubHeader>
-          <ModalText
-            style={{
-              maxWidth: "500px",
-              margin: "24px auto 32px",
-            }}
-          >
-            The quiz will start in **fullscreen mode**.
+          <Header>Quiz: {(subject || "subject").toUpperCase()}</Header>
+          <SubHeader style={{ fontSize: "16px" }}>Total Questions: {total}</SubHeader>
+          <SubHeader style={{ fontSize: "16px" }}>Time Limit: {formatTime(DEFAULT_TIME)}</SubHeader>
+          <ModalText style={{ maxWidth: "500px", margin: "24px auto 32px" }}>
+            The quiz will start in fullscreen mode.
             <br />
-            Switching tabs or exiting fullscreen will{" "}
-            <strong>auto-submit</strong> your test.
+            Switching tabs or exiting fullscreen will <strong>auto-submit</strong> your test.
           </ModalText>
-          <PrimaryButton onClick={handleStartQuiz}>
-            Start Quiz
-          </PrimaryButton>
+          <PrimaryButton onClick={handleStartQuiz}>Start Quiz</PrimaryButton>
         </ContentContainer>
       </PageContainer>
     );
+  }
 
-  // --- Main Quiz Render (No Navbar) ---
   return (
     <PageContainer>
-      {/* <Navbar /> <-- REMOVED */}
-
       {showConfirmModal && (
         <ModalBackdrop>
           <ModalCard>
             <ModalTitle>Confirm Submission</ModalTitle>
             <ModalText>Are you sure you want to submit your answers?</ModalText>
             <ButtonContainer>
-              <SecondaryButton onClick={() => setShowConfirmModal(false)}>
-                Cancel
-              </SecondaryButton>
-              <PrimaryButton onClick={handleConfirmSubmit} disabled={submitting}>{submitting ? "Submitting..." : "Submit"}</PrimaryButton>
+              <SecondaryButton onClick={() => setShowConfirmModal(false)}>Cancel</SecondaryButton>
+              <PrimaryButton onClick={handleConfirmSubmit} disabled={submitting}>
+                {submitting ? "Submitting..." : "Submit"}
+              </PrimaryButton>
             </ButtonContainer>
           </ModalCard>
         </ModalBackdrop>
       )}
 
       <ContentContainer>
-        <Header>Quiz: {subject.toUpperCase()}</Header>
+        <Header>Quiz: {(subject || "subject").toUpperCase()}</Header>
         <TimerBar>Time Left: {formatTime(timeLeft)}</TimerBar>
-        <SubHeader>✅ Your answers are saved locally as you go.</SubHeader>
+        <SubHeader>Your answers are saved locally as you go.</SubHeader>
 
         <ProgressBarContainer>
           <ProgressBarFill $percent={progress} />
         </ProgressBarContainer>
 
-        <p
-          style={{
-            textAlign: "right",
-            marginTop: "-18px",
-            marginBottom: "18px",
-            fontSize: "14px",
-            color: theme.cardText,
-          }}
-        >
+        <p style={{ textAlign: "right", marginTop: "-18px", marginBottom: "18px", fontSize: "14px", color: theme.cardText }}>
           {answeredCount} / {total} Answered
         </p>
 
@@ -565,7 +537,9 @@ function Quiz() {
         })}
 
         <ButtonContainer>
-          <PrimaryButton onClick={handleSubmit} disabled={submitting}>{submitting ? "Submitting..." : "Submit Quiz"}</PrimaryButton>
+          <PrimaryButton onClick={handleSubmit} disabled={submitting}>
+            {submitting ? "Submitting..." : "Submit Quiz"}
+          </PrimaryButton>
           <SecondaryButton onClick={handleSaveAll} disabled={submitting}>
             Save All Locally
           </SecondaryButton>

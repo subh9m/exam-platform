@@ -5,6 +5,8 @@ import com.examplatform.model.QuizResult;
 import com.examplatform.security.JwtUtil;
 import com.examplatform.service.QuizService;
 import com.examplatform.service.UserService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -18,6 +20,8 @@ import java.util.Map;
 @RequestMapping("/api/quiz")
 @CrossOrigin(origins = "http://localhost:5173")
 public class QuizController {
+
+    private static final Logger log = LoggerFactory.getLogger(QuizController.class);
 
     @Autowired
     private QuizService quizService;
@@ -57,39 +61,77 @@ public class QuizController {
 
     // ✅ Submit quiz and calculate score
     @PostMapping("/submit")
-    public ResponseEntity<?> submitQuiz(@RequestBody Map<String, Object> submissionData) {
+    public ResponseEntity<?> submitQuiz(@RequestBody Map<String, Object> submissionData, HttpServletRequest request) {
         try {
+            log.info("Quiz submit request received: {}", submissionData);
+
             String userId = (String) submissionData.get("userId");
+            log.info("Quiz submit userId from body: {}", userId);
+
+            if (userId == null || userId.isBlank()) {
+                userId = resolveUserId(request);
+                log.info("Quiz submit userId resolved from token: {}", userId);
+            }
+            if (userId == null || userId.isBlank()) {
+                return ResponseEntity.status(401).body(Map.of("error", "User not authenticated"));
+            }
+
             String subject = (String) submissionData.get("subject");
             String testId = (String) submissionData.get("testId");
 
-            if (testId == null || testId.isBlank()) {
-                return ResponseEntity.status(400).body(Map.of("error", "testId is required"));
-            }
-
             Map<String, String> answers = new HashMap<>();
             Object answersObj = submissionData.get("answers");
-            if (answersObj instanceof Map<?, ?> raw) {
-                raw.forEach((k, v) -> {
-                    if (k instanceof String key && v instanceof String value) {
-                        answers.put(key, value);
-                    }
-                });
+            if (!(answersObj instanceof Map<?, ?> raw)) {
+                return ResponseEntity.status(400).body(Map.of("error", "Invalid answers format"));
             }
 
-            int score = quizService.submitQuiz(userId, subject, testId, answers);
+            raw.forEach((k, v) -> {
+                if (k != null && v != null) {
+                    answers.put(String.valueOf(k), String.valueOf(v));
+                }
+            });
 
-            return ResponseEntity.ok(Map.of(
-                    "message", "Quiz submitted successfully!",
-                    "subject", subject,
-                    "testId", testId,
-                    "score", score
-            ));
+            log.info("Quiz submit answers received: count={}, keys={}", answers.size(), answers.keySet());
+
+            int score;
+            if (testId == null || testId.isBlank()) {
+                @SuppressWarnings("unchecked")
+                List<Map<String, Object>> questions = submissionData.get("questions") instanceof List<?>
+                        ? (List<Map<String, Object>>) submissionData.get("questions")
+                        : List.of();
+
+                if (questions.isEmpty()) {
+                    return ResponseEntity.status(400).body(Map.of("error", "No questions submitted"));
+                }
+
+                score = quizService.submitQuizDynamic(userId, subject, answers, questions);
+            } else {
+                score = quizService.submitQuiz(userId, subject, testId, answers);
+            }
+
+                Map<String, Object> payload = new HashMap<>();
+                payload.put("message", "Quiz submitted successfully!");
+                payload.put("subject", subject == null ? "" : subject);
+                payload.put("testId", testId == null ? "" : testId);
+                payload.put("score", score);
+                return ResponseEntity.ok(payload);
+
+                } catch (IllegalArgumentException e) {
+                    log.warn("Quiz submit validation failed: {}", e.getMessage());
+                    return ResponseEntity.status(400).body(Map.of(
+                        "error", safeMessage(e, "Invalid quiz submission")
+                    ));
+
+                } catch (IllegalStateException e) {
+                    log.warn("Quiz submit state failed: {}", e.getMessage());
+                    return ResponseEntity.status(400).body(Map.of(
+                        "error", safeMessage(e, "Invalid quiz submission state")
+                    ));
 
         } catch (Exception e) {
-            e.printStackTrace();
-            return ResponseEntity.status(400).body(Map.of(
-                    "error", e.getMessage()
+                    log.error("Quiz submit failed unexpectedly", e);
+                    return ResponseEntity.status(500).body(Map.of(
+                        "error", safeMessage(e, "Quiz submission failed")
             ));
         }
     }
@@ -111,7 +153,15 @@ public class QuizController {
             String userId = jwtUtil.extractUserId(token);
             return userService.findById(userId) == null ? null : userId;
         } catch (Exception ex) {
+            log.warn("Failed to resolve user from token: {}", ex.getMessage());
             return null;
         }
+    }
+
+    private String safeMessage(Exception ex, String fallback) {
+        if (ex == null || ex.getMessage() == null || ex.getMessage().isBlank()) {
+            return fallback;
+        }
+        return ex.getMessage();
     }
 }

@@ -101,7 +101,8 @@ function AttemptDetail() {
         setAttempt(res.data);
 
         if (!res.data.testId) {
-          setFullQuestions([]);
+          const snapshot = Array.isArray(res.data.questionSnapshot) ? res.data.questionSnapshot : [];
+          setFullQuestions(snapshot);
           return;
         }
 
@@ -124,7 +125,7 @@ function AttemptDetail() {
       </PageContainer>
     );
 
-  if (!attempt.testId)
+  if (!attempt.testId && fullQuestions.length === 0)
     return (
       <PageContainer>
         <Navbar />
@@ -150,10 +151,11 @@ function AttemptDetail() {
 
         {fullQuestions.map((q) => {
           const questionId = q.id || q._id || (q._id && q._id.$oid);
-          const userAns = attempt.answers[questionId];
+          const userAns = (attempt.answers || {})[questionId];
 
           const isCorrect =
             userAns &&
+            q.correctAnswer &&
             userAns.trim().toLowerCase() === q.correctAnswer.trim().toLowerCase();
 
           return (

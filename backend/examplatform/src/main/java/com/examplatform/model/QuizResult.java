@@ -4,6 +4,7 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.util.Date;
+import java.util.List;
 import java.util.Map;
 
 @Document(collection = "quiz_results")
@@ -19,11 +20,12 @@ public class QuizResult {
     private int score;
     private int totalQuestions;  // ✅ NEW
     private Map<String, String> answers; // ✅ NEW
+    private List<Map<String, Object>> questionSnapshot;
     private Date dateTaken;
 
     public QuizResult() {}
 
-    public QuizResult(String userId, String subject, String testId, String testName, int score, int totalQuestions, Map<String, String> answers, Date dateTaken) {
+    public QuizResult(String userId, String subject, String testId, String testName, int score, int totalQuestions, Map<String, String> answers, List<Map<String, Object>> questionSnapshot, Date dateTaken) {
         this.userId = userId;
         this.subject = subject;
         this.testId = testId;
@@ -31,6 +33,7 @@ public class QuizResult {
         this.score = score;
         this.totalQuestions = totalQuestions;
         this.answers = answers;
+        this.questionSnapshot = questionSnapshot;
         this.dateTaken = dateTaken;
     }
 
@@ -58,6 +61,9 @@ public class QuizResult {
 
     public Map<String, String> getAnswers() { return answers; }
     public void setAnswers(Map<String, String> answers) { this.answers = answers; }
+
+    public List<Map<String, Object>> getQuestionSnapshot() { return questionSnapshot; }
+    public void setQuestionSnapshot(List<Map<String, Object>> questionSnapshot) { this.questionSnapshot = questionSnapshot; }
 
     public Date getDateTaken() { return dateTaken; }
     public void setDateTaken(Date dateTaken) { this.dateTaken = dateTaken; }
