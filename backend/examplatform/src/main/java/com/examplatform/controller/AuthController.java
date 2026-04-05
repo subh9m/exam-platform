@@ -37,7 +37,7 @@ public class AuthController {
 
         try {
             otpService.issueOtp(email, "REGISTER");
-            return ResponseEntity.ok(Map.of("message", "OTP generated"));
+            return ResponseEntity.ok("OTP generated");
         } catch (IllegalStateException ex) {
             return ResponseEntity.status(429).body(Map.of("message", ex.getMessage()));
         }
@@ -89,7 +89,7 @@ public class AuthController {
 
         try {
             otpService.issueOtp(email, "LOGIN");
-            return ResponseEntity.ok(Map.of("message", "OTP generated"));
+            return ResponseEntity.ok("OTP generated");
         } catch (IllegalStateException ex) {
             return ResponseEntity.status(429).body(Map.of("message", ex.getMessage()));
         }
