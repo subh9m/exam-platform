@@ -2,6 +2,8 @@ package com.examplatform.service;
 
 import com.examplatform.model.OtpCode;
 import com.examplatform.repository.OtpCodeRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.security.SecureRandom;
@@ -10,6 +12,8 @@ import java.time.Instant;
 
 @Service
 public class OtpService {
+
+    private static final Logger log = LoggerFactory.getLogger(OtpService.class);
 
     private final OtpCodeRepository otpRepo;
     private final EmailService emailService;
@@ -47,13 +51,9 @@ public class OtpService {
 
         otpRepo.save(otp);
 
-        // 🔥 SAFE EMAIL BLOCK
-        try {
-            emailService.sendOtp(email, purpose, code);
-            System.out.println("OTP sent via email");
-        } catch (Exception e) {
-            System.out.println("Email failed. OTP for " + email + ": " + code);
-        }
+        // Let mail exceptions propagate so controller can return a clear API response.
+        emailService.sendOtp(email, purpose, code);
+        log.info("OTP email dispatched for purpose={} to={}", purpose, email);
     }
 
     public boolean verifyOtp(String email, String purpose, String code) {
