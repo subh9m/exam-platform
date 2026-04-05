@@ -1,5 +1,6 @@
 package com.examplatform.controller;
 
+import com.examplatform.dto.auth.AuthUserDto;
 import com.examplatform.model.User;
 import com.examplatform.security.JwtUtil;
 import com.examplatform.service.OtpService;
@@ -11,7 +12,6 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/auth")
-@CrossOrigin(origins = "http://localhost:5173")
 public class AuthController {
 
     private final UserService userService;
@@ -35,8 +35,12 @@ public class AuthController {
             return ResponseEntity.status(400).body(Map.of("message", "Email already registered"));
         }
 
-        otpService.issueOtp(email, "REGISTER");
-        return ResponseEntity.ok(Map.of("message", "OTP sent for registration"));
+        try {
+            otpService.issueOtp(email, "REGISTER");
+            return ResponseEntity.ok(Map.of("message", "OTP sent for registration"));
+        } catch (IllegalStateException ex) {
+            return ResponseEntity.status(429).body(Map.of("message", ex.getMessage()));
+        }
     }
 
     // ---------------------------------------------------
@@ -64,7 +68,7 @@ public class AuthController {
         User saved = userService.register(user);
         String token = jwtUtil.generateToken(saved.getId());
 
-        return ResponseEntity.ok(Map.of("user", saved, "token", token));
+        return ResponseEntity.ok(Map.of("user", AuthUserDto.from(saved), "token", token));
     }
 
     // ---------------------------------------------------
@@ -79,13 +83,15 @@ public class AuthController {
         try {
             // Check user credentials first
             userService.login(email, password);
-
-            // Send OTP
-            otpService.issueOtp(email, "LOGIN");
-
-            return ResponseEntity.ok(Map.of("message", "OTP sent to email"));
         } catch (Exception ex) {
             return ResponseEntity.status(400).body(Map.of("message", "Invalid email or password"));
+        }
+
+        try {
+            otpService.issueOtp(email, "LOGIN");
+            return ResponseEntity.ok(Map.of("message", "OTP sent to email"));
+        } catch (IllegalStateException ex) {
+            return ResponseEntity.status(429).body(Map.of("message", ex.getMessage()));
         }
     }
 
@@ -112,6 +118,6 @@ public class AuthController {
         }
         String token = jwtUtil.generateToken(user.getId());
 
-        return ResponseEntity.ok(Map.of("user", user, "token", token));
+        return ResponseEntity.ok(Map.of("user", AuthUserDto.from(user), "token", token));
     }
 }

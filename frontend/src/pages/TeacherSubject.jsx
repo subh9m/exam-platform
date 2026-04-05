@@ -26,6 +26,33 @@ const HeaderRow = styled.div`
   margin-bottom: 20px;
 `;
 
+const TopBackRow = styled.div`
+  display: flex;
+  justify-content: flex-start;
+  margin: -8px 0 12px;
+`;
+
+const TopBackButton = styled.button`
+  border: none;
+  cursor: pointer;
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: ${({ theme }) => `linear-gradient(180deg, ${theme.accent}, ${theme.accent})`};
+  color: ${({ theme }) => theme.onAccent};
+  font-size: 12px;
+  font-weight: 600;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+  &:hover {
+    transform: translateY(-1px) scale(1.03);
+    box-shadow: ${({ theme }) => theme.shadowSm};
+  }
+
+  &:active {
+    transform: scale(0.98);
+  }
+`;
+
 const Title = styled.h1`
   font-size: 32px;
   font-weight: 700;
@@ -133,11 +160,9 @@ function TeacherSubject() {
   const { subject } = useParams();
   const decodedSubject = decodeURIComponent(subject || "").trim();
   const normalizedSubject = decodedSubject.toLowerCase();
-  const [tests, setTests] = useState([]);
+  const [poolTest, setPoolTest] = useState(null);
   const [subjects, setSubjects] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [creating, setCreating] = useState(false);
-  const [deletingTestId, setDeletingTestId] = useState(null);
   const { showSnackbar } = useSnackbar();
 
   const subjectInfo = useMemo(
@@ -145,80 +170,47 @@ function TeacherSubject() {
     [subjects, normalizedSubject]
   );
 
-  const loadSubjects = async () => {
-    try {
-      const res = await api.get("/subjects");
-      setSubjects(Array.isArray(res.data) ? res.data : []);
-    } catch (err) {
-      setSubjects([]);
-    }
-  };
-
-  const loadTests = async () => {
+  const loadPool = async () => {
     setLoading(true);
     try {
-      const res = await api.get("/teacher/tests");
-      const all = Array.isArray(res.data) ? res.data : [];
-      const current = all.filter(
-        (item) => (item.subject || "").toLowerCase() === normalizedSubject
-      );
-      setTests(current);
+      const [subjectsRes, testsRes] = await Promise.all([
+        api.get("/subjects"),
+        api.get(`/tests/${encodeURIComponent(decodedSubject)}`),
+      ]);
+
+      const allSubjects = Array.isArray(subjectsRes.data) ? subjectsRes.data : [];
+      setSubjects(allSubjects);
+
+      const tests = Array.isArray(testsRes.data) ? testsRes.data : [];
+      const expectedPoolName = `${decodedSubject} Question Pool`.trim().toLowerCase();
+
+      let selectedPool =
+        tests.find((item) => (item.testName || "").trim().toLowerCase() === expectedPoolName) ||
+        tests.find((item) => (item.createdBy || "").trim().toLowerCase() === "system") ||
+        tests[0] ||
+        null;
+
+      if (!selectedPool) {
+        const createdRes = await api.post("/teacher/tests", {
+          subject: decodedSubject,
+          testName: `${decodedSubject} Question Pool`,
+        });
+        selectedPool = createdRes.data || null;
+      }
+
+      setPoolTest(selectedPool);
     } catch (err) {
-      setTests([]);
-      showSnackbar("Unable to load tests right now.", "error");
+      setPoolTest(null);
+      setSubjects([]);
+      showSnackbar("Unable to load question pool right now.", "error");
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadSubjects();
-    loadTests();
+    loadPool();
   }, [subject]);
-
-  const createTest = async () => {
-    const suggested = `Test ${tests.length + 1}`;
-    const nextName = window.prompt("Enter test name", suggested);
-    if (!nextName || !nextName.trim()) {
-      return;
-    }
-
-    try {
-      setCreating(true);
-      const res = await api.post("/teacher/tests", {
-        subject: decodedSubject,
-        testName: nextName.trim(),
-      });
-      const created = res.data;
-      if (created && (created.id || created._id)) {
-        setTests((prev) => [created, ...prev]);
-      } else {
-        await loadTests();
-      }
-      showSnackbar("Test created successfully.", "success");
-    } catch (err) {
-      showSnackbar("Could not create the test. Please try again.", "error");
-    } finally {
-      setCreating(false);
-    }
-  };
-
-  const handleDelete = async (id) => {
-    if (deletingTestId) return;
-    const confirmed = window.confirm("Delete this test and all linked questions?");
-    if (!confirmed) return;
-
-    try {
-      setDeletingTestId(id);
-      await api.delete(`/teacher/tests/${id}`);
-      setTests((prev) => prev.filter((test) => (test.id || test._id) !== id));
-      showSnackbar("Test deleted successfully.", "success");
-    } catch (err) {
-      showSnackbar("Could not delete the test. Please try again.", "error");
-    } finally {
-      setDeletingTestId(null);
-    }
-  };
 
   return (
     <PageContainer>
@@ -226,43 +218,37 @@ function TeacherSubject() {
       <ContentContainer>
         <HeaderRow>
           <Title>{subjectInfo?.name || decodedSubject || "Subject"}</Title>
-          <PrimaryButton onClick={createTest} disabled={creating}>
-            {creating ? "Creating..." : "Create Test"}
-          </PrimaryButton>
         </HeaderRow>
 
-        <SubText>{subjectInfo?.description || "Manage tests for this subject."}</SubText>
+        <TopBackRow>
+          <TopBackButton type="button" onClick={() => navigate("/teacher/dashboard")}>
+            ← Go Back
+          </TopBackButton>
+        </TopBackRow>
+
+        <SubText>{subjectInfo?.description || "Manage the question pool for this subject."}</SubText>
 
         <List>
           {loading ? (
-            <Empty>Loading tests...</Empty>
-          ) : tests.length === 0 ? (
-            <Empty>No tests found for this subject yet.</Empty>
+            <Empty>Loading question pool...</Empty>
+          ) : !poolTest ? (
+            <Empty>No question pool available for this subject.</Empty>
           ) : (
-            tests.map((test) => (
-              <Card key={test.id || test._id}>
-                <CardTop>
-                  <TestName>{test.testName}</TestName>
-                  <Actions>
-                    <ActionButton onClick={() => navigate(`/teacher/test/${test.id || test._id}`)}>
-                      Open
-                    </ActionButton>
-                    <ActionButton
-                      danger
-                      onClick={() => handleDelete(test.id || test._id)}
-                      disabled={deletingTestId === (test.id || test._id)}
-                    >
-                      {deletingTestId === (test.id || test._id) ? "Deleting..." : "Delete"}
-                    </ActionButton>
-                  </Actions>
-                </CardTop>
-                <Meta>Created by: {test.createdBy || "-"}</Meta>
-              </Card>
-            ))
+            <Card key={poolTest.id || poolTest._id}>
+              <CardTop>
+                <TestName>{poolTest.testName || "Question Pool"}</TestName>
+                <Actions>
+                  <PrimaryButton onClick={() => navigate(`/teacher/test/${poolTest.id || poolTest._id}`)}>
+                    Manage Pool
+                  </PrimaryButton>
+                </Actions>
+              </CardTop>
+              <Meta>Created by: {poolTest.createdBy || "-"}</Meta>
+            </Card>
           )}
         </List>
       </ContentContainer>
-      <SubjectFab onCreated={loadSubjects} />
+      <SubjectFab onCreated={loadPool} />
     </PageContainer>
   );
 }

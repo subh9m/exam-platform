@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import styled from "styled-components";
 import { motion } from "framer-motion";
 import Navbar from "../components/Navbar.jsx";
@@ -34,8 +34,15 @@ const Card = styled(motion.div)`
   border-radius: 14px;
   padding: 18px;
   background: ${({ theme }) => theme.cardBg};
-  border: 1px solid rgba(255,255,255,0.1);
+  border: 1px solid ${({ theme }) => theme.borderColor};
+  box-shadow: ${({ theme }) => theme.shadowSm};
   margin-bottom: 14px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+  &:hover {
+    transform: scale(1.02);
+    box-shadow: ${({ theme }) => theme.shadowMd};
+  }
 `;
 
 const EmptyText = styled.p`
@@ -67,8 +74,8 @@ const ItemList = styled.div`
 const Item = styled(motion.div)`
   border-radius: 10px;
   padding: 12px;
-  background: ${({ theme }) => (theme.text === "#fff" ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.03)")};
-  border: 1px solid ${({ theme }) => (theme.text === "#fff" ? "rgba(255,255,255,0.09)" : "rgba(0,0,0,0.08)")};
+  background: ${({ theme }) => theme.inputBg};
+  border: 1px solid ${({ theme }) => theme.inputBorder || theme.borderColor};
 `;
 
 const Row = styled.div`
@@ -91,13 +98,17 @@ const PrimaryButton = styled(motion.button)`
   padding: 9px 13px;
   border-radius: 9px;
   font-weight: 600;
-  color: #fff;
-  background: linear-gradient(180deg, #0052cc, #007aff);
+  color: ${({ theme }) => theme.onAccent};
+  background: ${({ theme }) => `linear-gradient(180deg, ${theme.accent}, ${theme.accent})`};
   transition: all 0.2s ease;
 
   &:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 8px 20px rgba(0, 122, 255, 0.24);
+    transform: translateY(-1px) scale(1.05);
+    box-shadow: ${({ theme }) => theme.shadowMd};
+  }
+
+  &:active {
+    transform: scale(0.98);
   }
 
   @media (max-width: 600px) {
@@ -118,6 +129,7 @@ function formatDate(value) {
 
 function Results() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { showSnackbar } = useSnackbar();
   const rawUser = localStorage.getItem("user");
   const user = useMemo(() => {
@@ -141,12 +153,20 @@ function Results() {
       try {
         if (isTeacher) {
           const response = await api.get("/teacher/results");
-          setRows(Array.isArray(response.data) ? response.data : []);
+          const payload = Array.isArray(response.data) ? response.data : [];
+          const mapped = payload.map((entry) => ({
+            ...entry,
+            attemptId: entry.attemptId || entry.id || entry._id || "",
+            createdAt: entry.createdAt || entry.dateTaken || null,
+            score: Number(entry.score || 0),
+            totalQuestions: Number(entry.totalQuestions || 0),
+          }));
+          setRows(mapped);
         } else {
           const response = await api.get("/quiz/my-results");
           const payload = Array.isArray(response.data) ? response.data : [];
           const mapped = payload.map((entry) => ({
-            attemptId: entry.id || entry._id || "",
+            attemptId: entry.attemptId || entry.id || entry._id || "",
             subject: String(entry.subject || "unknown").toUpperCase(),
             testName: entry.testName || "Test Attempt",
             score: Number(entry.score || 0),
@@ -236,6 +256,19 @@ function Results() {
     setExpandedStudentId((prev) => (prev === studentKey ? null : studentKey));
   };
 
+  const openAttempt = (attempt) => {
+    const attemptId = attempt?.attemptId || attempt?.id || attempt?._id;
+    if (!attemptId) {
+      showSnackbar("Attempt detail is unavailable for this record.", "error");
+      return;
+    }
+    navigate(`/attempt-history/${attemptId}`, {
+      state: {
+        from: `${location.pathname}${location.search}`,
+      },
+    });
+  };
+
   return (
     <PageContainer>
       <Navbar />
@@ -293,7 +326,11 @@ function Results() {
                             <PrimaryButton
                               whileTap={{ scale: 0.97 }}
                               type="button"
-                              onClick={() => navigate(`/attempt-history/${attempt.attemptId}`)}
+                              onClick={() => navigate(`/attempt-history/${attempt.attemptId}`, {
+                                state: {
+                                  from: `${location.pathname}${location.search}`,
+                                },
+                              })}
                             >
                               View Attempt
                             </PrimaryButton>
@@ -350,6 +387,16 @@ function Results() {
                                 <span>{Number(attempt?.score || 0)}/{Number(attempt?.totalQuestions || 0)}</span>
                               </Row>
                               <Meta>{formatDate(attempt?.createdAt || attempt?.dateTaken)}</Meta>
+                              <Row style={{ marginTop: "10px" }}>
+                                <span />
+                                <PrimaryButton
+                                  whileTap={{ scale: 0.97 }}
+                                  type="button"
+                                  onClick={() => openAttempt(attempt)}
+                                >
+                                  View Attempt
+                                </PrimaryButton>
+                              </Row>
                             </Item>
                           ))}
                         </ItemList>

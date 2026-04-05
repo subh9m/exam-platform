@@ -68,8 +68,8 @@ const SubjectCard = styled(motion.div)`
   border-radius: 14px;
   padding: 24px;
   background: ${({ theme }) => theme.cardBg}; /* Solid card background */
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.2); /* Softer, more professional shadow */
-  border: 1px solid rgba(255, 255, 255, 0.1); /* Subtle border */
+  box-shadow: ${({ theme }) => theme.shadowSm}; /* Softer, more professional shadow */
+  border: 1px solid ${({ theme }) => theme.borderColor}; /* Subtle border */
   transition: all 0.2s ease;
   display: flex;
   flex-direction: column;
@@ -77,8 +77,8 @@ const SubjectCard = styled(motion.div)`
   min-height: 220px; /* Ensures cards have a uniform height */
 
   &:hover {
-    transform: translateY(-6px); /* Subtle lift */
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+    transform: translateY(-6px) scale(1.02); /* Subtle lift */
+    box-shadow: ${({ theme }) => theme.shadowLg};
   }
 `;
 
@@ -121,11 +121,18 @@ const SecondaryButton = styled(motion.button)`
   padding: 10px 20px;
   border-radius: 8px;
   background: ${({ theme }) => theme.accent + "22"}; /* Subtle background */
+  border: 1px solid ${({ theme }) => theme.borderColor};
   transition: all 0.2s ease;
 
   &:hover {
-    background: ${({ theme }) => theme.accent + "44"};
+    transform: scale(1.05);
+    background: ${({ theme }) => theme.accent + "33"};
     color: ${({ theme }) => theme.text};
+    box-shadow: ${({ theme }) => theme.shadowSm};
+  }
+
+  &:active {
+    transform: scale(0.98);
   }
 
   @media (max-width: 600px) {
@@ -219,7 +226,7 @@ function Dashboard() {
                 initial={{ opacity: 0, y: 18, scale: 0.98 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 transition={{ duration: 0.24, delay: index * 0.03, ease: "easeOut" }}
-                whileHover={{ y: -6, scale: 1.01 }}
+                whileHover={{ y: -6, scale: 1.02 }}
               >
                 <CardContent>
                   <SubjectTitle>{subj.name}</SubjectTitle>

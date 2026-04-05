@@ -19,6 +19,7 @@ import java.util.*;
 public class QuizService {
 
     private static final Logger log = LoggerFactory.getLogger(QuizService.class);
+    private static final String SYSTEM_OWNER = "System";
 
     @Autowired
     private QuestionRepository questionRepository;
@@ -87,8 +88,11 @@ public class QuizService {
 
         Test test = testRepository.findById(testId).orElseThrow(() -> new RuntimeException("Test not found"));
 
-        if (!createdBy.equalsIgnoreCase(test.getCreatedBy())) {
-            throw new IllegalStateException("You can only modify your own tests");
+        String testOwner = test.getCreatedBy() == null ? "" : test.getCreatedBy().trim();
+        boolean ownTest = createdBy.equalsIgnoreCase(testOwner);
+        boolean systemTest = SYSTEM_OWNER.equalsIgnoreCase(testOwner);
+        if (!ownTest && !systemTest) {
+            throw new IllegalStateException("You can only modify your own tests or system tests");
         }
 
         Question q = new Question();
@@ -128,8 +132,19 @@ public class QuizService {
         Test test = testRepository.findById(question.getTestId())
                 .orElseThrow(() -> new NoSuchElementException("Test not found for this question"));
 
-        if (!teacherEmail.equalsIgnoreCase(test.getCreatedBy())) {
-            throw new IllegalStateException("You can only delete questions from your own tests");
+        String questionOwner = question.getCreatedBy() == null ? "" : question.getCreatedBy().trim();
+        String testOwner = test.getCreatedBy() == null ? "" : test.getCreatedBy().trim();
+
+        if (SYSTEM_OWNER.equalsIgnoreCase(questionOwner) || SYSTEM_OWNER.equalsIgnoreCase(testOwner)) {
+            if (!teacherEmail.equalsIgnoreCase(questionOwner)) {
+                throw new IllegalStateException("System questions cannot be deleted");
+            }
+        }
+
+        boolean ownQuestion = teacherEmail.equalsIgnoreCase(questionOwner);
+        boolean legacyOwnTestQuestion = questionOwner.isBlank() && teacherEmail.equalsIgnoreCase(testOwner);
+        if (!ownQuestion && !legacyOwnTestQuestion) {
+            throw new IllegalStateException("You can only delete questions that you added");
         }
 
         questionRepository.deleteById(questionId);
@@ -154,8 +169,19 @@ public class QuizService {
         Test test = testRepository.findById(existing.getTestId())
                 .orElseThrow(() -> new NoSuchElementException("Test not found for this question"));
 
-        if (!teacherEmail.equalsIgnoreCase(test.getCreatedBy())) {
-            throw new IllegalStateException("You can only update questions from your own tests");
+        String questionOwner = existing.getCreatedBy() == null ? "" : existing.getCreatedBy().trim();
+        String testOwner = test.getCreatedBy() == null ? "" : test.getCreatedBy().trim();
+
+        if (SYSTEM_OWNER.equalsIgnoreCase(questionOwner) || SYSTEM_OWNER.equalsIgnoreCase(testOwner)) {
+            if (!teacherEmail.equalsIgnoreCase(questionOwner)) {
+                throw new IllegalStateException("System questions cannot be updated");
+            }
+        }
+
+        boolean ownQuestion = teacherEmail.equalsIgnoreCase(questionOwner);
+        boolean legacyOwnTestQuestion = questionOwner.isBlank() && teacherEmail.equalsIgnoreCase(testOwner);
+        if (!ownQuestion && !legacyOwnTestQuestion) {
+            throw new IllegalStateException("You can only update questions that you added");
         }
 
         if (type == null || type.isBlank()) {
@@ -187,7 +213,7 @@ public class QuizService {
         existing.setCorrectAnswer(correctAnswer.trim());
         existing.setExplanation(explanation == null ? null : explanation.trim());
         existing.setSubject(test.getSubject());
-        existing.setCreatedBy(test.getCreatedBy());
+        existing.setCreatedBy(questionOwner.isBlank() ? teacherEmail : questionOwner);
         return questionRepository.save(existing);
     }
 
@@ -199,10 +225,22 @@ public class QuizService {
         return testRepository.findByCreatedBy(createdBy);
     }
 
+    public Test getTestById(String testId) {
+        return testRepository.findById(testId)
+                .orElseThrow(() -> new NoSuchElementException("Test not found"));
+    }
+
     public List<Question> getQuestionsByTestId(String testId) {
         List<Question> questions = questionRepository.findByTestId(testId);
         Collections.shuffle(questions);
         return questions;
+    }
+
+    public List<Question> getQuestionsByTestIdForTeacher(String testId) {
+        if (testId == null || testId.isBlank()) {
+            throw new IllegalArgumentException("testId is required");
+        }
+        return questionRepository.findByTestId(testId);
     }
 
 
@@ -369,13 +407,8 @@ public class QuizService {
     }
 
     public List<Map<String, Object>> getTeacherResults(String teacherEmail) {
-        List<Test> tests = testRepository.findByCreatedByIn(List.of(teacherEmail, "System"));
-        if (tests.isEmpty()) {
-            return List.of();
-        }
-
-        List<String> testIds = tests.stream().map(Test::getId).toList();
-        List<QuizResult> results = quizResultRepository.findByTestIdIn(testIds);
+        List<Test> tests = testRepository.findAll();
+        List<QuizResult> results = quizResultRepository.findAll();
 
         Map<String, User> usersById = new HashMap<>();
         for (User u : userRepository.findAll()) {

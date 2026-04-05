@@ -1,5 +1,6 @@
 import React from "react";
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import styled from "styled-components";
 import { motion } from "framer-motion";
 import Navbar from "../components/Navbar.jsx";
@@ -44,11 +45,18 @@ const Card = styled(motion.div)`
   border-radius: 14px;
   padding: 24px;
   background: ${({ theme }) => theme.cardBg};
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid ${({ theme }) => theme.borderColor};
+  box-shadow: ${({ theme }) => theme.shadowSm};
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   min-height: 210px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+  &:hover {
+    transform: scale(1.02);
+    box-shadow: ${({ theme }) => theme.shadowLg};
+  }
 `;
 
 const Title = styled.h3`
@@ -72,16 +80,17 @@ const Button = styled.button`
   color: ${({ theme }) => theme.accent};
   padding: 10px 20px;
   border-radius: 8px;
+  border: 1px solid ${({ theme }) => theme.borderColor};
   background: ${({ theme }) => theme.accent + "22"};
   transition: all 0.2s ease;
 
   &:hover {
-    transform: translateY(-2px) scale(1.02);
-    box-shadow: 0 10px 20px rgba(27, 116, 255, 0.2);
+    transform: translateY(-2px) scale(1.05);
+    box-shadow: ${({ theme }) => theme.shadowSm};
   }
 
   &:active {
-    transform: scale(0.97);
+    transform: scale(0.98);
   }
 
   @media (max-width: 600px) {
@@ -90,18 +99,24 @@ const Button = styled.button`
 `;
 
 const DeleteButton = styled(Button)`
-  color: #ffd6d6;
-  background: rgba(255, 89, 89, 0.2);
+  color: ${({ theme }) => theme.onAccent};
+  background: ${({ theme }) => `linear-gradient(180deg, ${theme.error}, ${theme.error})`};
+  border-color: ${({ theme }) => theme.error};
 
   &:hover {
-    box-shadow: 0 10px 20px rgba(255, 89, 89, 0.25);
+    box-shadow: ${({ theme }) => theme.shadowMd};
   }
+`;
+
+const CardActions = styled.div`
+  display: grid;
+  gap: 10px;
 `;
 
 const Overlay = styled.div`
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: ${({ theme }) => theme.overlay};
   backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
@@ -114,8 +129,8 @@ const Modal = styled.div`
   width: min(460px, 100%);
   border-radius: 14px;
   background: ${({ theme }) => theme.cardBg};
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.4);
+  border: 1px solid ${({ theme }) => theme.borderColor};
+  box-shadow: ${({ theme }) => theme.shadowLg};
   padding: 20px;
 `;
 
@@ -137,6 +152,7 @@ const ModalActions = styled.div`
 `;
 
 function TeacherDashboard() {
+  const navigate = useNavigate();
   const { showSnackbar } = useSnackbar();
   const [subjects, setSubjects] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -222,21 +238,24 @@ function TeacherDashboard() {
           ) : (
             subjects.map((subject, index) => (
               <Card
-                key={subject.id}
+                key={subject.id || subject._id}
                 initial={{ opacity: 0, y: 16, scale: 0.98 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 transition={{ duration: 0.22, delay: index * 0.03, ease: "easeOut" }}
-                whileHover={{ y: -4, scale: 1.01 }}
+                whileHover={{ y: -4, scale: 1.02 }}
               >
                 <div>
                   <Title>{subject.name}</Title>
                   <Description>{subject.description}</Description>
                 </div>
-                {(subject.createdBy || "").trim().toLowerCase() === teacherEmail ? (
-                  <DeleteButton onClick={() => openDeleteModal(subject)}>Delete Subject</DeleteButton>
-                ) : (
-                  <Button disabled title="Only creator can delete this subject">System Subject</Button>
-                )}
+                <CardActions>
+                  <Button onClick={() => navigate(`/teacher/subject/${encodeURIComponent(subject.name || "")}`)}>
+                    Manage Subject
+                  </Button>
+                  {(subject.createdBy || "").trim().toLowerCase() === teacherEmail ? (
+                    <DeleteButton onClick={() => openDeleteModal(subject)}>Delete Subject</DeleteButton>
+                  ) : null}
+                </CardActions>
               </Card>
             ))
           )}

@@ -23,6 +23,12 @@ const Header = styled.h2`
   margin-bottom: 10px;
 `;
 
+const TopBackRow = styled.div`
+  display: flex;
+  justify-content: flex-start;
+  margin: 0 0 12px;
+`;
+
 const SubText = styled.p`
   color: ${({ theme }) => theme.cardText};
   margin: 0 0 22px;
@@ -32,8 +38,15 @@ const SubjectCard = styled.div`
   border-radius: 14px;
   padding: 18px;
   background: ${({ theme }) => theme.cardBg};
-  border: 1px solid rgba(255,255,255,0.1);
+  border: 1px solid ${({ theme }) => theme.borderColor};
+  box-shadow: ${({ theme }) => theme.shadowSm};
   margin-bottom: 14px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+  &:hover {
+    transform: scale(1.02);
+    box-shadow: ${({ theme }) => theme.shadowMd};
+  }
 `;
 
 const SubjectTitle = styled.h3`
@@ -45,8 +58,8 @@ const Attempt = styled.div`
   margin-top: 12px;
   border-radius: 10px;
   padding: 12px;
-  border: 1px solid rgba(255,255,255,0.08);
-  background: ${({ theme }) => (theme.text === "#fff" ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.03)")};
+  border: 1px solid ${({ theme }) => theme.inputBorder || theme.borderColor};
+  background: ${({ theme }) => theme.inputBg};
 `;
 
 const Row = styled.div`
@@ -60,12 +73,48 @@ const Row = styled.div`
 const BackButton = styled.button`
   border: none;
   cursor: pointer;
-  padding: 10px 14px;
-  border-radius: 9px;
-  color: #fff;
+  padding: 7px 10px;
+  border-radius: 8px;
+  color: ${({ theme }) => theme.onAccent};
   font-weight: 600;
-  background: linear-gradient(180deg, #0052cc, #007aff);
-  margin-top: 10px;
+  font-size: 12px;
+  background: ${({ theme }) => `linear-gradient(180deg, ${theme.accent}, ${theme.accent})`};
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+  &:hover {
+    transform: translateY(-1px) scale(1.03);
+    box-shadow: ${({ theme }) => theme.shadowSm};
+  }
+
+  &:active {
+    transform: scale(0.98);
+  }
+`;
+
+const ViewAttemptButton = styled.button`
+  border: none;
+  cursor: pointer;
+  padding: 8px 12px;
+  border-radius: 8px;
+  color: ${({ theme }) => theme.onAccent};
+  font-weight: 600;
+  background: ${({ theme }) => `linear-gradient(180deg, ${theme.accent}, ${theme.accent})`};
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+  &:hover {
+    transform: scale(1.04);
+    box-shadow: ${({ theme }) => theme.shadowSm};
+  }
+
+  &:active {
+    transform: scale(0.98);
+  }
+
+  &:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+    box-shadow: none;
+  }
 `;
 
 function formatDate(value) {
@@ -143,8 +192,10 @@ function TeacherStudentResults() {
       <Navbar />
       <ContentContainer>
         <Header>{studentName} - Detailed Results</Header>
+        <TopBackRow>
+          <BackButton type="button" onClick={() => navigate("/results")}>← Go Back</BackButton>
+        </TopBackRow>
         <SubText>{studentEmail}</SubText>
-        <BackButton type="button" onClick={() => navigate("/results")}>Back to Results</BackButton>
 
         {loading ? <SubText>Loading student results...</SubText> : null}
         {!loading && rows.length === 0 ? <SubText>No attempts found for this student.</SubText> : null}
@@ -163,7 +214,17 @@ function TeacherStudentResults() {
                     </Row>
                     <Row>
                       <span>Attempted: {formatDate(attempt.dateTaken)}</span>
-                      <span />
+                      <ViewAttemptButton
+                        type="button"
+                        disabled={!attempt?.attemptId}
+                        onClick={() => navigate(`/attempt-history/${attempt.attemptId}`, {
+                          state: {
+                            from: `${location.pathname}${location.search}`,
+                          },
+                        })}
+                      >
+                        View Attempt
+                      </ViewAttemptButton>
                     </Row>
                   </Attempt>
                 ))}

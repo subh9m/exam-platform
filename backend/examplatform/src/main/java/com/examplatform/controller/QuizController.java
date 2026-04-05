@@ -18,7 +18,6 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/quiz")
-@CrossOrigin(origins = "http://localhost:5173")
 public class QuizController {
 
     private static final Logger log = LoggerFactory.getLogger(QuizController.class);
@@ -63,15 +62,7 @@ public class QuizController {
     @PostMapping("/submit")
     public ResponseEntity<?> submitQuiz(@RequestBody Map<String, Object> submissionData, HttpServletRequest request) {
         try {
-            log.info("Quiz submit request received: {}", submissionData);
-
-            String userId = (String) submissionData.get("userId");
-            log.info("Quiz submit userId from body: {}", userId);
-
-            if (userId == null || userId.isBlank()) {
-                userId = resolveUserId(request);
-                log.info("Quiz submit userId resolved from token: {}", userId);
-            }
+            String userId = resolveUserId(request);
             if (userId == null || userId.isBlank()) {
                 return ResponseEntity.status(401).body(Map.of("error", "User not authenticated"));
             }
@@ -164,4 +155,5 @@ public class QuizController {
         }
         return ex.getMessage();
     }
+
 }

@@ -19,6 +19,7 @@ public class OtpCode {
     private String purpose;       // REGISTER | LOGIN
     private String code;          // 6 digit OTP
     private Instant createdAt;
+    private Instant lastRequestAt;
     private Instant expiresAt;
     private int attempts;         // Prevent brute-force
 }

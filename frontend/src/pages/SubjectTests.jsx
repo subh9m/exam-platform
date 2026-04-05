@@ -23,6 +23,33 @@ const Header = styled.h1`
   margin: 0 0 10px;
 `;
 
+const TopBackRow = styled.div`
+  display: flex;
+  justify-content: flex-start;
+  margin: 0 0 12px;
+`;
+
+const TopBackButton = styled.button`
+  border: none;
+  cursor: pointer;
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: ${({ theme }) => `linear-gradient(180deg, ${theme.accent}, ${theme.accent})`};
+  color: ${({ theme }) => theme.onAccent};
+  font-size: 12px;
+  font-weight: 600;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+  &:hover {
+    transform: translateY(-1px) scale(1.03);
+    box-shadow: ${({ theme }) => theme.shadowSm};
+  }
+
+  &:active {
+    transform: scale(0.98);
+  }
+`;
+
 const SubText = styled.p`
   color: ${({ theme }) => theme.cardText};
   margin: 0 0 24px;
@@ -138,6 +165,11 @@ function SubjectTests() {
       <Navbar />
       <ContentContainer>
         <Header>{decodedSubject || "Subject"}</Header>
+        <TopBackRow>
+          <TopBackButton type="button" onClick={() => navigate("/dashboard")}>
+            ← Go Back
+          </TopBackButton>
+        </TopBackRow>
         <SubText>Choose how many questions you want to attempt.</SubText>
 
         <Card

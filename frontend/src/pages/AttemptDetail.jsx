@@ -1,6 +1,6 @@
 // src/pages/AttemptDetail.jsx
 import React, { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import styled from "styled-components";
 import api from "../api/api.js";
 import Navbar from "../components/Navbar.jsx";
@@ -23,6 +23,33 @@ const Header = styled.h2`
   color: ${({ theme }) => theme.text};
   margin-bottom: 28px;
   text-align: center;
+`;
+
+const TopBackRow = styled.div`
+  display: flex;
+  justify-content: flex-start;
+  margin: -8px 0 14px;
+`;
+
+const TopBackButton = styled.button`
+  border: none;
+  border-radius: 8px;
+  background: ${({ theme }) => `linear-gradient(180deg, ${theme.accent}, ${theme.accent})`};
+  color: ${({ theme }) => theme.onAccent};
+  font-size: 12px;
+  font-weight: 600;
+  padding: 7px 10px;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+  &:hover {
+    transform: translateY(-1px) scale(1.03);
+    box-shadow: ${({ theme }) => theme.shadowSm};
+  }
+
+  &:active {
+    transform: scale(0.98);
+  }
 `;
 
 const AttemptInfo = styled.p`
@@ -54,10 +81,15 @@ const AnswerLine = styled.p`
   border-radius: 8px;
   font-size: 15px;
   color: ${({ theme }) => theme.text};
-  ${({ correct }) =>
-    correct
-      ? `background: rgba(0,255,0,0.12); border-left: 4px solid #3cff3c;`
-      : `background: rgba(255,0,0,0.12); border-left: 4px solid #ff4d4d;`}
+  ${({ $state }) => {
+    if ($state === "correct") {
+      return "background: rgba(0,255,0,0.12); border-left: 4px solid #3cff3c;";
+    }
+    if ($state === "incorrect") {
+      return "background: rgba(255,0,0,0.12); border-left: 4px solid #ff4d4d;";
+    }
+    return "background: rgba(0,122,255,0.10); border-left: 4px solid #007aff;";
+  }}
 `;
 
 const CorrectAnswer = styled.p`
@@ -88,26 +120,75 @@ const BackButton = styled.button`
   }
 `;
 
+const EmptyState = styled.div`
+  background: ${({ theme }) => theme.cardBg};
+  border-radius: 14px;
+  padding: 20px;
+  border: 1px solid ${({ theme }) => theme.borderColor};
+  text-align: center;
+  color: ${({ theme }) => theme.cardText};
+`;
+
+function buildFallbackQuestionsFromAnswers(answers) {
+  const entries = Object.entries(answers || {});
+  return entries.map(([key, value], index) => ({
+    id: `fallback-${index}`,
+    questionText: key,
+    selectedAnswer: value,
+    correctAnswer: "",
+    isFallback: true,
+  }));
+}
+
 function AttemptDetail() {
   const { attemptId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const [attempt, setAttempt] = useState(null);
   const [fullQuestions, setFullQuestions] = useState([]);
+
+  let storedUser = null;
+  try {
+    const raw = localStorage.getItem("user");
+    storedUser = raw ? JSON.parse(raw) : null;
+  } catch {
+    storedUser = null;
+  }
+
+  const isTeacher = String(storedUser?.role || storedUser?.userRole || "").toUpperCase() === "TEACHER";
+  const fallbackBackRoute = isTeacher ? "/results" : "/attempt-history";
+  const backRoute = typeof location.state?.from === "string" && location.state.from
+    ? location.state.from
+    : fallbackBackRoute;
 
   useEffect(() => {
     async function fetchDetails() {
       try {
         const res = await api.get(`/quiz/history/detail/${attemptId}`);
-        setAttempt(res.data);
+        const payload = res.data || {};
+        setAttempt(payload);
 
-        if (!res.data.testId) {
-          const snapshot = Array.isArray(res.data.questionSnapshot) ? res.data.questionSnapshot : [];
+        const snapshot = Array.isArray(payload.questionSnapshot)
+          ? payload.questionSnapshot
+          : Array.isArray(payload.questionsSnapshot)
+            ? payload.questionsSnapshot
+            : Array.isArray(payload.snapshot)
+              ? payload.snapshot
+              : [];
+
+        if (snapshot.length > 0) {
           setFullQuestions(snapshot);
           return;
         }
 
-        const qRes = await api.get(`/quiz/all/test/${res.data.testId}`);
-        setFullQuestions(qRes.data);
+        if (!payload.testId) {
+          const fallbackQuestions = buildFallbackQuestionsFromAnswers(payload.answers || {});
+          setFullQuestions(fallbackQuestions);
+          return;
+        }
+
+        const qRes = await api.get(`/quiz/all/test/${payload.testId}`);
+        setFullQuestions(Array.isArray(qRes.data) ? qRes.data : []);
       } catch (err) {
         console.error(err);
       }
@@ -125,56 +206,62 @@ function AttemptDetail() {
       </PageContainer>
     );
 
-  if (!attempt.testId && fullQuestions.length === 0)
-    return (
-      <PageContainer>
-        <Navbar />
-        <ContentContainer>
-          <Header>Legacy Attempt</Header>
-          <AttemptInfo>This attempt was created before test-linked architecture and cannot be rendered with full question details.</AttemptInfo>
-          <BackButton onClick={() => navigate("/attempt-history")}>← Back to Attempt History</BackButton>
-        </ContentContainer>
-      </PageContainer>
-    );
-
   return (
     <PageContainer>
       <Navbar />
       <ContentContainer>
 
-        <Header>{attempt.subject.toUpperCase()} - Attempt Review</Header>
+        <Header>{String(attempt.subject || "Unknown").toUpperCase()} - Attempt Review</Header>
+
+        <TopBackRow>
+          <TopBackButton type="button" onClick={() => navigate(backRoute)}>
+            ← Go Back
+          </TopBackButton>
+        </TopBackRow>
 
         <AttemptInfo>
-          Score: <b>{attempt.score}</b> / {attempt.totalQuestions} <br />
-          Taken On: {new Date(attempt.dateTaken).toLocaleString()}
+          Score: <b>{Number(attempt.score || 0)}</b> / {Number(attempt.totalQuestions || 0)} <br />
+          Taken On: {attempt.dateTaken ? new Date(attempt.dateTaken).toLocaleString() : "-"}
         </AttemptInfo>
 
-        {fullQuestions.map((q) => {
-          const questionId = q.id || q._id || (q._id && q._id.$oid);
-          const userAns = (attempt.answers || {})[questionId];
+        {fullQuestions.length === 0 ? (
+          <EmptyState>
+            Question-level details are unavailable for this attempt, but your score and metadata are shown above.
+          </EmptyState>
+        ) : null}
 
-          const isCorrect =
-            userAns &&
-            q.correctAnswer &&
-            userAns.trim().toLowerCase() === q.correctAnswer.trim().toLowerCase();
+        {fullQuestions.map((q, index) => {
+          const questionId = q?.id || q?._id || (q?._id && q?._id.$oid) || `q-${index}`;
+          const answersMap = attempt.answers || {};
+          const userAns = answersMap[questionId] ?? answersMap[q?.questionText] ?? q?.selectedAnswer;
+
+          const normalizedUser = typeof userAns === "string" ? userAns.trim().toLowerCase() : "";
+          const normalizedCorrect = typeof q?.correctAnswer === "string" ? q.correctAnswer.trim().toLowerCase() : "";
+          const hasCorrectAnswer = normalizedCorrect.length > 0;
+          const isCorrect = hasCorrectAnswer && normalizedUser.length > 0 && normalizedUser === normalizedCorrect;
+
+          const answerState = hasCorrectAnswer
+            ? (isCorrect ? "correct" : "incorrect")
+            : "neutral";
+
 
           return (
             <QuestionCard key={questionId}>
-              <QuestionText>{q.questionText}</QuestionText>
+              <QuestionText>{q?.questionText || `Question ${index + 1}`}</QuestionText>
 
-              <AnswerLine correct={isCorrect}>
+              <AnswerLine $state={answerState}>
                 Your Answer: {userAns || "Not attempted"}
               </AnswerLine>
 
-              {!isCorrect && (
-                <CorrectAnswer>Correct Answer: {q.correctAnswer}</CorrectAnswer>
+              {hasCorrectAnswer && !isCorrect && (
+                <CorrectAnswer>Correct Answer: {q.correctAnswer || "-"}</CorrectAnswer>
               )}
             </QuestionCard>
           );
         })}
 
-        <BackButton onClick={() => navigate("/attempt-history")}>
-          ← Back to Attempt History
+        <BackButton onClick={() => navigate(backRoute)}>
+          ← Go Back
         </BackButton>
 
       </ContentContainer>

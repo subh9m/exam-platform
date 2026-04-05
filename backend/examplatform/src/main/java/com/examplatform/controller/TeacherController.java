@@ -18,7 +18,6 @@ import java.util.NoSuchElementException;
 
 @RestController
 @RequestMapping("/api/teacher")
-@CrossOrigin(origins = "http://localhost:5173")
 public class TeacherController {
 
     private final QuizService quizService;
@@ -77,6 +76,34 @@ public class TeacherController {
         }
         List<Test> tests = quizService.getTestsByTeacher(teacher.getEmail());
         return ResponseEntity.ok(tests);
+    }
+
+    @GetMapping("/tests/{testId}")
+    public ResponseEntity<?> testById(@PathVariable String testId, HttpServletRequest request) {
+        User teacher = resolveTeacher(request);
+        if (teacher == null) {
+            return ResponseEntity.status(403).body(Map.of("message", "Only teachers can view tests"));
+        }
+
+        try {
+            return ResponseEntity.ok(quizService.getTestById(testId));
+        } catch (NoSuchElementException ex) {
+            return ResponseEntity.status(404).body(Map.of("message", ex.getMessage()));
+        }
+    }
+
+    @GetMapping("/tests/{testId}/questions")
+    public ResponseEntity<?> questionsByTest(@PathVariable String testId, HttpServletRequest request) {
+        User teacher = resolveTeacher(request);
+        if (teacher == null) {
+            return ResponseEntity.status(403).body(Map.of("message", "Only teachers can view questions"));
+        }
+
+        try {
+            return ResponseEntity.ok(quizService.getQuestionsByTestIdForTeacher(testId));
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.status(400).body(Map.of("message", ex.getMessage()));
+        }
     }
 
     @PostMapping("/questions")

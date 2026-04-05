@@ -16,6 +16,8 @@ public class OtpService {
     private final SecureRandom rnd = new SecureRandom();
     private static final Duration OTP_TTL = Duration.ofMinutes(5);
     private static final int MAX_ATTEMPTS = 5;
+    private static final Duration OTP_RATE_LIMIT_WINDOW = Duration.ofMinutes(5);
+    private static final int MAX_OTP_REQUESTS_PER_WINDOW = 3;
 
     public OtpService(OtpCodeRepository otpRepo, EmailService emailService) {
         this.otpRepo = otpRepo;
@@ -25,9 +27,12 @@ public class OtpService {
     public void issueOtp(String email, String purpose) {
         email = email.toLowerCase().trim();
         purpose = purpose.toUpperCase().trim();
+        Instant now = Instant.now();
 
-        // delete old OTPs
-        otpRepo.deleteByEmailAndPurpose(email, purpose);
+        long recentRequests = otpRepo.countByEmailAndCreatedAtAfter(email, now.minus(OTP_RATE_LIMIT_WINDOW));
+        if (recentRequests >= MAX_OTP_REQUESTS_PER_WINDOW) {
+            throw new IllegalStateException("Too many OTP requests. Maximum 3 requests in 5 minutes.");
+        }
 
         String code = String.format("%06d", rnd.nextInt(1_000_000));
 
@@ -35,8 +40,9 @@ public class OtpService {
         otp.setEmail(email);
         otp.setPurpose(purpose);
         otp.setCode(code);
-        otp.setCreatedAt(Instant.now());
-        otp.setExpiresAt(Instant.now().plus(OTP_TTL));
+        otp.setCreatedAt(now);
+        otp.setLastRequestAt(now);
+        otp.setExpiresAt(now.plus(OTP_TTL));
         otp.setAttempts(0);
 
         otpRepo.save(otp);

@@ -4,6 +4,7 @@ import styled from "styled-components";
 import Navbar from "../components/Navbar.jsx";
 import SubjectFab from "../components/SubjectFab.jsx";
 import api from "../api/api.js";
+import { questionBank } from "../data/questions.js";
 import { useSnackbar } from "../context/SnackbarContext.jsx";
 
 const PageContainer = styled.div`
@@ -26,6 +27,33 @@ const HeaderRow = styled.div`
   margin-bottom: 20px;
 `;
 
+const TopBackRow = styled.div`
+  display: flex;
+  justify-content: flex-start;
+  margin: -8px 0 12px;
+`;
+
+const TopBackButton = styled.button`
+  border: none;
+  cursor: pointer;
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: ${({ theme }) => `linear-gradient(180deg, ${theme.accent}, ${theme.accent})`};
+  color: ${({ theme }) => theme.onAccent};
+  font-size: 12px;
+  font-weight: 600;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+  &:hover {
+    transform: translateY(-1px) scale(1.03);
+    box-shadow: ${({ theme }) => theme.shadowSm};
+  }
+
+  &:active {
+    transform: scale(0.98);
+  }
+`;
+
 const Title = styled.h1`
   font-size: 32px;
   font-weight: 700;
@@ -43,34 +71,18 @@ const PrimaryButton = styled.button`
   cursor: pointer;
   padding: 11px 16px;
   border-radius: 10px;
-  color: #fff;
+  color: ${({ theme }) => theme.onAccent};
   font-weight: 600;
-  background: linear-gradient(180deg, #0052cc, #007aff);
+  background: ${({ theme }) => `linear-gradient(180deg, ${theme.accent}, ${theme.accent})`};
   transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
 
   &:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow: 0 10px 20px rgba(0, 122, 255, 0.28);
+    transform: translateY(-2px) scale(1.05);
+    box-shadow: ${({ theme }) => theme.shadowMd};
   }
 
-  &:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-`;
-
-const GhostButton = styled.button`
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  cursor: pointer;
-  padding: 9px 13px;
-  border-radius: 9px;
-  background: transparent;
-  color: ${({ theme }) => theme.text};
-  font-weight: 600;
-  transition: background 0.2s ease, opacity 0.2s ease;
-
-  &:hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.08);
+  &:active:not(:disabled) {
+    transform: scale(0.98);
   }
 
   &:disabled {
@@ -88,13 +100,13 @@ const Card = styled.div`
   border-radius: 14px;
   padding: 16px;
   background: ${({ theme }) => theme.cardBg};
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.16);
+  border: 1px solid ${({ theme }) => theme.borderColor};
+  box-shadow: ${({ theme }) => theme.shadowSm};
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 
   &:hover {
-    transform: translateY(-2px) scale(1.005);
-    box-shadow: 0 14px 28px rgba(0, 0, 0, 0.22);
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: ${({ theme }) => theme.shadowLg};
   }
 `;
 
@@ -124,18 +136,23 @@ const Actions = styled.div`
 `;
 
 const ActionButton = styled.button`
-  border: none;
+  border: 1px solid ${({ danger, theme }) => (danger ? theme.error : theme.borderColor)};
   cursor: pointer;
   padding: 9px 14px;
   border-radius: 9px;
   font-weight: 600;
-  color: ${({ danger, theme }) => (danger ? "#ffd6d6" : theme.accent)};
-  background: ${({ danger, theme }) => (danger ? "rgba(255, 89, 89, 0.18)" : theme.accent + "22")};
+  color: ${({ danger, theme }) => (danger ? theme.onAccent : theme.accent)};
+  background: ${({ danger, theme }) => (danger ? `linear-gradient(180deg, ${theme.error}, ${theme.error})` : theme.accent + "1c")};
   transition: transform 0.2s ease, opacity 0.2s ease, background 0.2s ease;
 
   &:hover:not(:disabled) {
-    transform: translateY(-1px);
-    background: ${({ danger, theme }) => (danger ? "rgba(255, 89, 89, 0.28)" : theme.accent + "33")};
+    transform: translateY(-1px) scale(1.05);
+    background: ${({ danger, theme }) => (danger ? `linear-gradient(180deg, ${theme.error}, ${theme.error})` : theme.accent + "2a")};
+    box-shadow: ${({ theme }) => theme.shadowSm};
+  }
+
+  &:active:not(:disabled) {
+    transform: scale(0.98);
   }
 
   &:disabled {
@@ -151,7 +168,7 @@ const Empty = styled.p`
 const Overlay = styled.div`
   position: fixed;
   inset: 0;
-  background: rgba(5, 10, 20, 0.62);
+  background: ${({ theme }) => theme.overlay};
   backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
@@ -165,9 +182,9 @@ const Modal = styled.form`
   max-height: 90vh;
   overflow-y: auto;
   border-radius: 16px;
-  background: ${({ theme }) => (theme.text === "#fff" ? "#0f1624" : "#ffffff")};
-  border: 1px solid ${({ theme }) => (theme.text === "#fff" ? "rgba(255,255,255,0.16)" : "rgba(0,0,0,0.12)")};
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+  background: ${({ theme }) => theme.cardBg};
+  border: 1px solid ${({ theme }) => theme.borderColor};
+  box-shadow: ${({ theme }) => theme.shadowLg};
   padding: 24px;
   display: flex;
   flex-direction: column;
@@ -183,9 +200,9 @@ const Input = styled.input`
   width: 100%;
   border-radius: 10px;
   padding: 12px;
-  background: ${({ theme }) => (theme.text === "#fff" ? "rgba(255,255,255,0.04)" : "#f9fbff")};
-  border: 1px solid ${({ theme }) => (theme.text === "#fff" ? "rgba(255,255,255,0.16)" : "rgba(0,0,0,0.12)")};
-  color: ${({ theme }) => theme.text};
+  background: ${({ theme }) => theme.inputBg};
+  border: 1px solid ${({ theme }) => theme.inputBorder || theme.borderColor};
+  color: ${({ theme }) => theme.textPrimary};
 
   &:focus {
     outline: none;
@@ -200,9 +217,9 @@ const TextArea = styled.textarea`
   padding: 12px;
   min-height: 90px;
   resize: vertical;
-  background: ${({ theme }) => (theme.text === "#fff" ? "rgba(255,255,255,0.04)" : "#f9fbff")};
-  border: 1px solid ${({ theme }) => (theme.text === "#fff" ? "rgba(255,255,255,0.16)" : "rgba(0,0,0,0.12)")};
-  color: ${({ theme }) => theme.text};
+  background: ${({ theme }) => theme.inputBg};
+  border: 1px solid ${({ theme }) => theme.inputBorder || theme.borderColor};
+  color: ${({ theme }) => theme.textPrimary};
 
   &:focus {
     outline: none;
@@ -215,9 +232,9 @@ const Select = styled.select`
   width: 100%;
   border-radius: 10px;
   padding: 12px;
-  background: ${({ theme }) => (theme.text === "#fff" ? "rgba(255,255,255,0.04)" : "#f9fbff")};
-  border: 1px solid ${({ theme }) => (theme.text === "#fff" ? "rgba(255,255,255,0.16)" : "rgba(0,0,0,0.12)")};
-  color: ${({ theme }) => theme.text};
+  background: ${({ theme }) => theme.inputBg};
+  border: 1px solid ${({ theme }) => theme.inputBorder || theme.borderColor};
+  color: ${({ theme }) => theme.textPrimary};
 
   &:focus {
     outline: none;
@@ -233,17 +250,26 @@ const ModalActions = styled.div`
 `;
 
 const ModalButton = styled.button`
-  border: none;
+  border: ${({ secondary, theme }) => (secondary
+    ? `1px solid ${theme.borderColor}`
+    : "none")};
   cursor: pointer;
   padding: 10px 15px;
   border-radius: 9px;
-  color: #fff;
+  color: ${({ secondary, theme }) => (secondary ? theme.textPrimary : theme.onAccent)};
   font-weight: 600;
-  background: ${({ secondary }) => (secondary ? "rgba(255, 255, 255, 0.2)" : "linear-gradient(180deg, #0052cc, #007aff)")};
-  transition: transform 0.2s ease, opacity 0.2s ease;
+  background: ${({ secondary, theme }) => (secondary
+    ? theme.accent + "14"
+    : `linear-gradient(180deg, ${theme.accent}, ${theme.accent})`)};
+  transition: transform 0.2s ease, opacity 0.2s ease, box-shadow 0.2s ease;
 
   &:hover:not(:disabled) {
-    transform: translateY(-1px);
+    transform: translateY(-1px) scale(1.05);
+    box-shadow: ${({ theme }) => theme.shadowSm};
+  }
+
+  &:active:not(:disabled) {
+    transform: scale(0.98);
   }
 
   &:disabled {
@@ -262,7 +288,7 @@ function TeacherTestDetail() {
   const navigate = useNavigate();
   const { testId } = useParams();
 
-  const [allTests, setAllTests] = useState([]);
+  const [test, setTest] = useState(null);
   const [questions, setQuestions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -271,6 +297,8 @@ function TeacherTestDetail() {
   const [deletingTest, setDeletingTest] = useState(false);
   const [deletingQuestionId, setDeletingQuestionId] = useState(null);
   const { showSnackbar } = useSnackbar();
+  const user = JSON.parse(localStorage.getItem("user") || "null");
+  const teacherEmail = (user?.email || "").trim().toLowerCase();
 
   const [type, setType] = useState("MCQ");
   const [questionText, setQuestionText] = useState("");
@@ -278,22 +306,55 @@ function TeacherTestDetail() {
   const [correctAnswer, setCorrectAnswer] = useState("");
   const [explanation, setExplanation] = useState("");
 
-  const test = useMemo(
-    () => allTests.find((item) => (item.id || item._id) === testId),
-    [allTests, testId]
+  const isOwnTest = useMemo(
+    () => ((test?.createdBy || "").trim().toLowerCase() === teacherEmail),
+    [test, teacherEmail]
   );
+
+  const normalizeTextKey = (value) => String(value || "").trim().toLowerCase();
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const [testsRes, questionsRes] = await Promise.all([
-        api.get("/teacher/tests"),
-        api.get(`/tests/${testId}/questions`),
+      const [testRes, questionsRes] = await Promise.all([
+        api.get(`/teacher/tests/${testId}`),
+        api.get(`/teacher/tests/${testId}/questions`),
       ]);
-      setAllTests(Array.isArray(testsRes.data) ? testsRes.data : []);
-      setQuestions(Array.isArray(questionsRes.data) ? questionsRes.data : []);
+      const fetchedTest = testRes.data || null;
+      const backendQuestions = Array.isArray(questionsRes.data) ? questionsRes.data : [];
+
+      const subjectKey = String(fetchedTest?.subject || "").trim().toUpperCase();
+      const bankQuestions = Array.isArray(questionBank[subjectKey]) ? questionBank[subjectKey] : [];
+
+      const mappedSystemQuestions = bankQuestions.map((item, index) => ({
+        id: `system-bank-${subjectKey}-${index}`,
+        testId,
+        subject: fetchedTest?.subject || "",
+        createdBy: "System",
+        type: "MCQ",
+        questionText: item.questionText,
+        options: Array.isArray(item.options) ? item.options : [],
+        correctAnswer: item.correctAnswer,
+        explanation: item.explanation || "",
+      }));
+
+      const existingQuestionKeys = new Set(
+        backendQuestions.map((question) => normalizeTextKey(question?.questionText))
+      );
+
+      const mergedQuestions = [...backendQuestions];
+      mappedSystemQuestions.forEach((question) => {
+        const key = normalizeTextKey(question.questionText);
+        if (!existingQuestionKeys.has(key)) {
+          mergedQuestions.push(question);
+          existingQuestionKeys.add(key);
+        }
+      });
+
+      setTest(fetchedTest);
+      setQuestions(mergedQuestions);
     } catch (err) {
-      setAllTests([]);
+      setTest(null);
       setQuestions([]);
       showSnackbar("Unable to load this test right now.", "error");
     } finally {
@@ -304,6 +365,17 @@ function TeacherTestDetail() {
   useEffect(() => {
     loadData();
   }, [testId]);
+
+  const canManageQuestion = (question) => {
+    const questionOwner = (question?.createdBy || "").trim().toLowerCase();
+    if (questionOwner === "system") {
+      return false;
+    }
+    if (questionOwner === teacherEmail) {
+      return true;
+    }
+    return isOwnTest && !questionOwner;
+  };
 
   const resetForm = () => {
     setType("MCQ");
@@ -387,6 +459,11 @@ function TeacherTestDetail() {
 
   const handleDeleteQuestion = async (questionId) => {
     if (deletingQuestionId) return;
+    const question = questions.find((item) => (item.id || item._id) === questionId);
+    if (!canManageQuestion(question)) {
+      showSnackbar("You can delete only questions you added.", "error");
+      return;
+    }
     const confirmed = window.confirm("Delete this question?");
     if (!confirmed) return;
 
@@ -403,6 +480,10 @@ function TeacherTestDetail() {
   };
 
   const handleDeleteTest = async () => {
+    if (!isOwnTest) {
+      showSnackbar("Only creator can delete this test.", "error");
+      return;
+    }
     const confirmed = window.confirm("Delete this test and all linked questions?");
     if (!confirmed) return;
 
@@ -425,13 +506,18 @@ function TeacherTestDetail() {
         <HeaderRow>
           <Title>{test?.testName || "Test Details"}</Title>
           <div style={{ display: "flex", gap: "10px" }}>
-            <ActionButton danger onClick={handleDeleteTest} disabled={deletingTest}>
+            <ActionButton danger onClick={handleDeleteTest} disabled={deletingTest || !isOwnTest}>
               {deletingTest ? "Deleting..." : "Delete Test"}
             </ActionButton>
-            <GhostButton onClick={() => navigate(`/teacher/subject/${test?.subject || ""}`)}>Back to Subject</GhostButton>
             <PrimaryButton onClick={openAddModal}>Add Question</PrimaryButton>
           </div>
         </HeaderRow>
+
+        <TopBackRow>
+          <TopBackButton type="button" onClick={() => navigate(`/teacher/subject/${test?.subject || ""}`)}>
+            ← Go Back
+          </TopBackButton>
+        </TopBackRow>
 
         <SubText>Manage all questions for this test.</SubText>
 
@@ -448,13 +534,19 @@ function TeacherTestDetail() {
                     <QuestionText>{question.questionText}</QuestionText>
                     <Meta>Type: {(question.type || "MCQ").toUpperCase()}</Meta>
                     {question.explanation ? <Meta>Explanation: {question.explanation}</Meta> : null}
+                    <Meta>
+                      Added by: {question.createdBy || "Unknown"}
+                      {String(question.createdBy || "").trim().toLowerCase() === "system" ? " (Locked System Question)" : ""}
+                    </Meta>
                   </div>
                   <Actions>
-                    <ActionButton onClick={() => openEditModal(question)}>Edit</ActionButton>
+                    <ActionButton onClick={() => openEditModal(question)} disabled={!canManageQuestion(question)}>
+                      Edit
+                    </ActionButton>
                     <ActionButton
                       danger
                       onClick={() => handleDeleteQuestion(question.id || question._id)}
-                      disabled={deletingQuestionId === (question.id || question._id)}
+                      disabled={deletingQuestionId === (question.id || question._id) || !canManageQuestion(question)}
                     >
                       {deletingQuestionId === (question.id || question._id) ? "Deleting..." : "Delete"}
                     </ActionButton>

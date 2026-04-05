@@ -2,56 +2,74 @@ import React, { useContext, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/api.js";
 import styled from "styled-components";
+import { motion } from "framer-motion";
 import { useSnackbar } from "../context/SnackbarContext.jsx";
 import { ThemeContext } from "../context/ThemeContext.jsx";
 import LoadingSpinner from "../components/LoadingSpinner.jsx";
 
-const LoginContainer = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
+const PageShell = styled.div`
   min-height: 100vh;
   background: ${({ theme }) => theme.background};
-  padding: 18px;
   position: relative;
+  overflow-x: hidden;
+`;
+
+const ContentWrap = styled.div`
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 92px 16px 36px;
+
+  @media (max-width: 980px) {
+    padding: 92px 14px 24px;
+  }
+`;
+
+const FormStage = styled(motion.div)`
+  width: 100%;
+  max-width: 520px;
 `;
 
 const LoginFormCard = styled.div`
   width: 100%;
-  max-width: 460px;
   border-radius: 16px;
-  padding: 28px;
+  padding: 30px;
   background: ${({ theme }) => theme.cardBg};
-  border: 1px solid ${({ theme }) => (theme.text === "#edf4ff" ? "rgba(255,255,255,0.12)" : "rgba(16,32,57,0.12)")};
-  box-shadow: 0 18px 38px rgba(0, 0, 0, 0.22);
+  border: 1px solid ${({ theme }) => theme.borderColor};
+  box-shadow: ${({ theme }) => theme.shadowLg};
   backdrop-filter: blur(8px);
+
+  @media (max-width: 540px) {
+    padding: 22px;
+    border-radius: 14px;
+  }
 `;
 
 const Header = styled.h2`
   text-align: center;
-  margin-bottom: 24px;
+  margin-bottom: 22px;
   color: ${({ theme }) => theme.text};
 `;
 
 const TopRightThemeToggle = styled.button`
   position: fixed;
-  top: 14px;
+  top: 16px;
   right: 16px;
   font-size: 18px;
-  border: none;
+  border: 1px solid ${({ theme }) => theme.borderColor};
   cursor: pointer;
   background: ${({ theme }) => theme.cardBg};
   color: ${({ theme }) => theme.text};
   padding: 8px 14px;
   border-radius: 50px;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.25);
+  box-shadow: ${({ theme }) => theme.shadowSm};
   transition: all 0.2s ease;
   z-index: 20;
 
   &:hover {
     transform: scale(1.08);
-    box-shadow: 0 4px 18px rgba(0,0,0,0.35);
+    box-shadow: ${({ theme }) => theme.shadowMd};
   }
 
   &:active {
@@ -75,9 +93,9 @@ const StyledInput = styled.input`
   width: 100%;
   padding: 12px 14px;
   border-radius: 10px;
-  background: ${({ theme }) => (theme.text === "#edf4ff" ? "rgba(255,255,255,0.04)" : "#f9fbff")};
-  color: ${({ theme }) => theme.text};
-  border: 1px solid ${({ theme }) => (theme.text === "#edf4ff" ? "rgba(255,255,255,0.16)" : "rgba(0,0,0,0.12)")};
+  background: ${({ theme }) => theme.inputBg};
+  color: ${({ theme }) => theme.textPrimary};
+  border: 1px solid ${({ theme }) => theme.inputBorder || theme.borderColor};
   font-size: 15px;
   outline: none;
   transition: all 0.2s ease;
@@ -93,7 +111,7 @@ const StyledLabel = styled.span`
   left: 14px;
   top: 12px;
   font-size: 15px;
-  color: ${({ theme }) => (theme.text === "#edf4ff" ? "rgba(255,255,255,0.56)" : "rgba(16,32,57,0.55)")};
+  color: ${({ theme }) => theme.textSecondary};
   transition: all 0.2s ease;
   pointer-events: none;
 
@@ -108,8 +126,8 @@ const StyledLabel = styled.span`
 const SubmitButton = styled.button`
   padding: 12px 20px;
   border-radius: 12px;
-  background: linear-gradient(180deg, #0052cc, #007aff);
-  color: white;
+  background: ${({ theme }) => `linear-gradient(180deg, ${theme.accent}, ${theme.accent})`};
+  color: ${({ theme }) => theme.onAccent};
   font-weight: 600;
   font-size: 16px; /* Explicitly set font size */
   cursor: pointer;
@@ -117,12 +135,12 @@ const SubmitButton = styled.button`
   transition: all 0.2s ease;
 
   &:hover:not(:disabled) {
-    transform: translateY(-2px) scale(1.02);
-    box-shadow: 0 12px 24px rgba(0, 122, 255, 0.28);
+    transform: translateY(-2px) scale(1.05);
+    box-shadow: ${({ theme }) => theme.shadowMd};
   }
 
   &:active:not(:disabled) {
-    transform: scale(0.97);
+    transform: scale(0.98);
   }
 
   &:disabled {
@@ -156,15 +174,15 @@ const RoleSwitch = styled.div`
 const RoleButton = styled.button`
   padding: 8px 12px;
   border-radius: 10px;
-  border: 1px solid ${({ active, theme }) => (active ? theme.accent : (theme.text === "#edf4ff" ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.14)"))};
+  border: 1px solid ${({ active, theme }) => (active ? theme.accent : theme.borderColor)};
   cursor: pointer;
-  background: ${({ active, theme }) => (active ? theme.accent : (theme.text === "#edf4ff" ? "rgba(255,255,255,0.08)" : "rgba(27,116,255,0.08)"))};
-  color: ${({ active, theme }) => (active ? "#fff" : theme.text)};
+  background: ${({ active, theme }) => (active ? theme.accent : theme.accent + "14")};
+  color: ${({ active, theme }) => (active ? theme.onAccent : theme.textPrimary)};
   font-weight: 600;
   transition: all 0.2s ease;
 
   &:hover {
-    transform: translateY(-1px);
+    transform: translateY(-1px) scale(1.05);
   }
 
   &:active {
@@ -199,7 +217,8 @@ export default function Login() {
       showSnackbar("OTP sent to your email.", "info");
       setStep(2);
     } catch (err) {
-      showSnackbar("Unable to send OTP. Please check your details and try again.", "error");
+      const msg = err?.response?.data?.message || "Unable to send OTP. Please check your details and try again.";
+      showSnackbar(msg, "error");
     } finally {
       setSendingOtp(false);
     }
@@ -225,89 +244,98 @@ export default function Login() {
       showSnackbar("OTP verified. Login successful.", "success");
       navigate("/dashboard");
     } catch (err) {
-      showSnackbar("OTP verification failed. Please try again.", "error");
+      const msg = err?.response?.data?.message || "OTP verification failed. Please try again.";
+      showSnackbar(msg, "error");
     } finally {
       setVerifyingOtp(false);
     }
   };
 
   return (
-    <LoginContainer>
+    <PageShell>
       <TopRightThemeToggle onClick={toggleTheme} aria-label="Toggle theme">
         {theme === "dark" ? "☀️" : "🌙"}
       </TopRightThemeToggle>
 
-      <LoginFormCard>
-        <Header>Login</Header>
+      <ContentWrap>
+        <FormStage
+          initial={{ opacity: 0, x: -24 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.32, ease: "easeOut" }}
+        >
+          <LoginFormCard>
+            <Header>Login</Header>
 
-        <RoleSwitch>
-          <RoleButton type="button" active={role === "STUDENT"} onClick={() => setRole("STUDENT")}>Student</RoleButton>
-          <RoleButton type="button" active={role === "TEACHER"} onClick={() => setRole("TEACHER")}>Teacher</RoleButton>
-        </RoleSwitch>
+            <RoleSwitch>
+              <RoleButton type="button" active={role === "STUDENT"} onClick={() => setRole("STUDENT")}>Student</RoleButton>
+              <RoleButton type="button" active={role === "TEACHER"} onClick={() => setRole("TEACHER")}>Teacher</RoleButton>
+            </RoleSwitch>
 
-        {step === 1 && (
-          <Form onSubmit={sendOtp}>
-            <FieldWrapper>
-              <StyledInput
-                name="email"
-                type="email"
-                placeholder=" "
-                onChange={handleChange}
-                required
-              />
-              <StyledLabel>Email</StyledLabel>
-            </FieldWrapper>
+            {step === 1 && (
+              <Form onSubmit={sendOtp}>
+                <FieldWrapper>
+                  <StyledInput
+                    name="email"
+                    type="email"
+                    placeholder=" "
+                    onChange={handleChange}
+                    required
+                  />
+                  <StyledLabel>Email</StyledLabel>
+                </FieldWrapper>
 
-            <FieldWrapper>
-              <StyledInput
-                name="password"
-                type="password"
-                placeholder=" "
-                onChange={handleChange}
-                required
-              />
-              <StyledLabel>Password</StyledLabel>
-            </FieldWrapper>
+                <FieldWrapper>
+                  <StyledInput
+                    name="password"
+                    type="password"
+                    placeholder=" "
+                    onChange={handleChange}
+                    required
+                  />
+                  <StyledLabel>Password</StyledLabel>
+                </FieldWrapper>
 
-            <SubmitButton type="submit" disabled={sendingOtp}>
-              {sendingOtp ? (
-                <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
-                  <LoadingSpinner size={14} />
-                  Sending...
-                </span>
-              ) : "Send OTP"}
-            </SubmitButton>
-          </Form>
-        )}
+                <SubmitButton type="submit" disabled={sendingOtp}>
+                  {sendingOtp ? (
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+                      <LoadingSpinner size={14} />
+                      Sending...
+                    </span>
+                  ) : "Send OTP"}
+                </SubmitButton>
+              </Form>
+            )}
 
-        {step === 2 && (
-          <Form onSubmit={verifyOtp}>
-            <FieldWrapper>
-              <StyledInput
-                name="otp"
-                placeholder=" "
-                onChange={(e) => setOtp(e.target.value)}
-                required
-              />
-              <StyledLabel>Enter OTP</StyledLabel>
-            </FieldWrapper>
+            {step === 2 && (
+              <Form onSubmit={verifyOtp}>
+                <FieldWrapper>
+                  <StyledInput
+                    name="otp"
+                    placeholder=" "
+                    onChange={(e) => setOtp(e.target.value)}
+                    required
+                  />
+                  <StyledLabel>Enter OTP</StyledLabel>
+                </FieldWrapper>
 
-            <SubmitButton type="submit" disabled={verifyingOtp}>
-              {verifyingOtp ? (
-                <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
-                  <LoadingSpinner size={14} />
-                  Verifying...
-                </span>
-              ) : "Verify & Login"}
-            </SubmitButton>
-          </Form>
-        )}
+                <SubmitButton type="submit" disabled={verifyingOtp}>
+                  {verifyingOtp ? (
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+                      <LoadingSpinner size={14} />
+                      Verifying...
+                    </span>
+                  ) : "Verify & Login"}
+                </SubmitButton>
+              </Form>
+            )}
 
+            <RegisterMessage>
+              New user? <a href="/register">Register</a>
+            </RegisterMessage>
+          </LoginFormCard>
 
-        <RegisterMessage>
-          New user? <a href="/register">Register</a>
-        </RegisterMessage>
-      </LoginFormCard>
-    </LoginContainer>
+        </FormStage>
+      </ContentWrap>
+    </PageShell>
   );
 }
