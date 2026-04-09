@@ -22,6 +22,8 @@ public class User {
     private String password;       // Hashed password
     private String role = "STUDENT";
     private int totalScore = 0;    // Score tracking
+    private String googleId;       // Linked Google account subject
+    private String authProvider = "EMAIL";
 
     private boolean verified = false;  // ✅ email verified or not
 

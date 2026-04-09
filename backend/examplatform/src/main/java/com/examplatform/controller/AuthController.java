@@ -5,28 +5,18 @@ import com.examplatform.model.User;
 import com.examplatform.security.JwtUtil;
 import com.examplatform.service.OtpService;
 import com.examplatform.service.UserService;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.Duration;
-import java.time.Instant;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.Map;
 
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
 
-    private static final Duration OTP_BYPASS_WINDOW = Duration.ofMinutes(5);
-    private final ConcurrentHashMap<String, Instant> loginBypassUntilByEmail = new ConcurrentHashMap<>();
-
     private final UserService userService;
     private final OtpService otpService;
     private final JwtUtil jwtUtil;
-
-    @Value("${OTP_ENABLED:true}")
-    private boolean otpEnabled;
 
     public AuthController(UserService userService, OtpService otpService, JwtUtil jwtUtil) {
         this.userService = userService;
@@ -43,10 +33,6 @@ public class AuthController {
 
         if (userService.findByEmail(email) != null) {
             return ResponseEntity.status(400).body(Map.of("message", "Email already registered"));
-        }
-
-        if (!otpEnabled) {
-            return ResponseEntity.ok("OTP disabled. Continue registration.");
         }
 
         try {
@@ -69,7 +55,7 @@ public class AuthController {
         String otp = body.get("otp");
         String role = body.getOrDefault("role", "STUDENT");
 
-        if (otpEnabled && !otpService.verifyOtp(email, "REGISTER", otp)) {
+        if (!otpService.verifyOtp(email, "REGISTER", otp)) {
             return ResponseEntity.status(400).body(Map.of("message", "Invalid or expired OTP"));
         }
 
@@ -101,11 +87,6 @@ public class AuthController {
             return ResponseEntity.status(400).body(Map.of("message", "Invalid email or password"));
         }
 
-        if (!otpEnabled) {
-            grantLoginBypass(email);
-            return ResponseEntity.ok("OTP disabled. Continue login.");
-        }
-
         try {
             otpService.issueOtp(email, "LOGIN");
             return ResponseEntity.ok("OTP generated");
@@ -124,12 +105,8 @@ public class AuthController {
         String otp = body.get("otp");
         String requestedRole = body.get("role");
 
-        if (otpEnabled) {
-            if (!otpService.verifyOtp(email, "LOGIN", otp)) {
-                return ResponseEntity.status(400).body(Map.of("message", "Invalid or expired OTP"));
-            }
-        } else if (!consumeLoginBypass(email)) {
-            return ResponseEntity.status(400).body(Map.of("message", "Please verify email/password first"));
+        if (!otpService.verifyOtp(email, "LOGIN", otp)) {
+            return ResponseEntity.status(400).body(Map.of("message", "Invalid or expired OTP"));
         }
 
         User user = userService.findByEmail(email);
@@ -142,36 +119,5 @@ public class AuthController {
         String token = jwtUtil.generateToken(user.getId());
 
         return ResponseEntity.ok(Map.of("user", AuthUserDto.from(user), "token", token));
-    }
-
-    private void grantLoginBypass(String email) {
-        String normalized = normalizeEmail(email);
-        if (!normalized.isBlank()) {
-            loginBypassUntilByEmail.put(normalized, Instant.now().plus(OTP_BYPASS_WINDOW));
-        }
-    }
-
-    private boolean consumeLoginBypass(String email) {
-        String normalized = normalizeEmail(email);
-        if (normalized.isBlank()) {
-            return false;
-        }
-
-        Instant expiresAt = loginBypassUntilByEmail.get(normalized);
-        if (expiresAt == null) {
-            return false;
-        }
-
-        if (Instant.now().isAfter(expiresAt)) {
-            loginBypassUntilByEmail.remove(normalized);
-            return false;
-        }
-
-        loginBypassUntilByEmail.remove(normalized);
-        return true;
-    }
-
-    private String normalizeEmail(String email) {
-        return email == null ? "" : email.toLowerCase().trim();
     }
 }

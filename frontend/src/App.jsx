@@ -14,6 +14,7 @@ import TeacherSubject from "./pages/TeacherSubject.jsx";
 import TeacherTestDetail from "./pages/TeacherTestDetail.jsx";
 import Results from "./pages/Results.jsx";
 import TeacherStudentResults from "./pages/TeacherStudentResults.jsx";
+import GoogleAuthCallback from "./pages/GoogleAuthCallback.jsx";
 import PageTransition from "./components/PageTransition.jsx";
 
 
@@ -25,6 +26,7 @@ function AnimatedRoutes() {
       <Routes location={location} key={location.pathname}>
         <Route path="/" element={<PageTransition><Login /></PageTransition>} />
         <Route path="/register" element={<PageTransition><Register /></PageTransition>} />
+        <Route path="/auth/google/callback" element={<PageTransition><GoogleAuthCallback /></PageTransition>} />
         <Route path="/dashboard" element={<PageTransition><Dashboard /></PageTransition>} />
         <Route path="/subject/:subject/tests" element={<PageTransition><SubjectTests /></PageTransition>} />
         <Route path="/quiz/:subject" element={<PageTransition><Quiz /></PageTransition>} />

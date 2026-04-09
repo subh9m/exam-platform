@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import { useSnackbar } from "../context/SnackbarContext.jsx";
 import { ThemeContext } from "../context/ThemeContext.jsx";
 import LoadingSpinner from "../components/LoadingSpinner.jsx";
+import GoogleAuthButton from "../components/GoogleAuthButton.jsx";
 
 const PageShell = styled.div`
   min-height: 100vh;
@@ -50,6 +51,18 @@ const Header = styled.h2`
   text-align: center;
   margin-bottom: 22px;
   color: ${({ theme }) => theme.text};
+`;
+
+const TopLeftBrand = styled.h2`
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.accent};
+  letter-spacing: 0.5px;
+  z-index: 20;
 `;
 
 const TopRightThemeToggle = styled.button`
@@ -174,10 +187,10 @@ const RoleSwitch = styled.div`
 const RoleButton = styled.button`
   padding: 8px 12px;
   border-radius: 10px;
-  border: 1px solid ${({ active, theme }) => (active ? theme.accent : theme.borderColor)};
+  border: 1px solid ${({ $active, theme }) => ($active ? theme.accent : theme.borderColor)};
   cursor: pointer;
-  background: ${({ active, theme }) => (active ? theme.accent : theme.accent + "14")};
-  color: ${({ active, theme }) => (active ? theme.onAccent : theme.textPrimary)};
+  background: ${({ $active, theme }) => ($active ? theme.accent : theme.accent + "14")};
+  color: ${({ $active, theme }) => ($active ? theme.onAccent : theme.textPrimary)};
   font-weight: 600;
   transition: all 0.2s ease;
 
@@ -214,6 +227,7 @@ export default function Login() {
       const payload = { email, password: form.password, role };
       console.log("[Login] send OTP payload:", payload);
       await api.post("/auth/send-otp/login", payload);
+
       showSnackbar("OTP sent to your email.", "info");
       setStep(2);
     } catch (err) {
@@ -253,6 +267,8 @@ export default function Login() {
 
   return (
     <PageShell>
+      <TopLeftBrand>Exam Platform</TopLeftBrand>
+
       <TopRightThemeToggle onClick={toggleTheme} aria-label="Toggle theme">
         {theme === "dark" ? "☀️" : "🌙"}
       </TopRightThemeToggle>
@@ -267,8 +283,8 @@ export default function Login() {
             <Header>Login</Header>
 
             <RoleSwitch>
-              <RoleButton type="button" active={role === "STUDENT"} onClick={() => setRole("STUDENT")}>Student</RoleButton>
-              <RoleButton type="button" active={role === "TEACHER"} onClick={() => setRole("TEACHER")}>Teacher</RoleButton>
+              <RoleButton type="button" $active={role === "STUDENT"} onClick={() => setRole("STUDENT")}>Student</RoleButton>
+              <RoleButton type="button" $active={role === "TEACHER"} onClick={() => setRole("TEACHER")}>Teacher</RoleButton>
             </RoleSwitch>
 
             {step === 1 && (
@@ -303,6 +319,8 @@ export default function Login() {
                     </span>
                   ) : "Send OTP"}
                 </SubmitButton>
+
+                <GoogleAuthButton mode="login" disabled={sendingOtp || verifyingOtp} />
               </Form>
             )}
 
