@@ -38,8 +38,13 @@ public class AuthController {
         try {
             otpService.issueOtp(email, "REGISTER");
             return ResponseEntity.ok("OTP generated");
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.status(400).body(Map.of("message", ex.getMessage()));
         } catch (IllegalStateException ex) {
-            return ResponseEntity.status(429).body(Map.of("message", ex.getMessage()));
+            int status = ex.getMessage() != null && ex.getMessage().toLowerCase().contains("too many otp requests")
+                    ? 429
+                    : 503;
+            return ResponseEntity.status(status).body(Map.of("message", ex.getMessage()));
         }
     }
 
@@ -90,8 +95,13 @@ public class AuthController {
         try {
             otpService.issueOtp(email, "LOGIN");
             return ResponseEntity.ok("OTP generated");
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.status(400).body(Map.of("message", ex.getMessage()));
         } catch (IllegalStateException ex) {
-            return ResponseEntity.status(429).body(Map.of("message", ex.getMessage()));
+            int status = ex.getMessage() != null && ex.getMessage().toLowerCase().contains("too many otp requests")
+                    ? 429
+                    : 503;
+            return ResponseEntity.status(status).body(Map.of("message", ex.getMessage()));
         }
     }
 

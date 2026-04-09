@@ -29,6 +29,13 @@ public class OtpService {
     }
 
     public void issueOtp(String email, String purpose) {
+        if (email == null || email.isBlank()) {
+            throw new IllegalArgumentException("Email is required");
+        }
+        if (purpose == null || purpose.isBlank()) {
+            throw new IllegalArgumentException("OTP purpose is required");
+        }
+
         email = email.toLowerCase().trim();
         purpose = purpose.toUpperCase().trim();
         Instant now = Instant.now();
@@ -51,14 +58,14 @@ public class OtpService {
 
         otpRepo.save(otp);
 
-        // Fire-and-forget email dispatch so API request is never blocked on SMTP.
-        try {
-            emailService.sendOtpAsync(email, purpose, code);
-            log.info("OTP generated and async email queued for purpose={} to={}", purpose, email);
-        } catch (Exception ex) {
-            // Even async submission failures should not block OTP generation response.
-            log.error("OTP generated but async email enqueue failed for purpose={} to={}", purpose, email, ex);
+        boolean delivered = emailService.sendOtp(email, purpose, code);
+        if (!delivered) {
+            otpRepo.delete(otp);
+            log.error("OTP generation aborted because email delivery failed for purpose={} to={}", purpose, email);
+            throw new IllegalStateException("Unable to deliver OTP email right now. Please check email settings and try again.");
         }
+
+        log.info("OTP generated and delivered for purpose={} to={}", purpose, email);
     }
 
     public boolean verifyOtp(String email, String purpose, String code) {
