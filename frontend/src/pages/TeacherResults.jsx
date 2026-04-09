@@ -10,14 +10,14 @@ const PageContainer = styled.div`
 
 const ContentContainer = styled.div`
   max-width: 980px;
-  margin: 40px auto 0;
-  padding: 0 30px 60px;
+  margin: clamp(20px, 4vw, 40px) auto 0;
+  padding: 0 clamp(14px, 3.4vw, 30px) 60px;
 `;
 
 const Header = styled.h2`
-  font-size: 30px;
+  font-size: clamp(25px, 4.6vw, 32px);
   color: ${({ theme }) => theme.text};
-  margin-bottom: 20px;
+  margin-bottom: 16px;
 `;
 
 const Card = styled.div`

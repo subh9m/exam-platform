@@ -15,14 +15,14 @@ const PageContainer = styled.div`
 
 const ContentContainer = styled.div`
   max-width: 980px;
-  margin: 40px auto 0;
-  padding: 0 30px 60px;
+  margin: clamp(20px, 4vw, 40px) auto 0;
+  padding: 0 clamp(14px, 3.4vw, 30px) 64px;
 `;
 
 const Header = styled.h2`
-  font-size: 32px;
+  font-size: clamp(26px, 4.8vw, 34px);
   color: ${({ theme }) => theme.text};
-  margin-bottom: 18px;
+  margin-bottom: 14px;
 `;
 
 const SubText = styled.p`
@@ -60,7 +60,7 @@ const CardHeader = styled.button`
   gap: 10px;
   cursor: pointer;
   color: ${({ theme }) => theme.text};
-  font-size: 18px;
+  font-size: clamp(16px, 2.8vw, 18px);
   font-weight: 700;
   padding: 0;
 `;

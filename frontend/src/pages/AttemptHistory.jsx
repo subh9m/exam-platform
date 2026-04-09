@@ -1,5 +1,6 @@
 // src/pages/AttemptHistory.jsx
 import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import styled from "styled-components";
 import api from "../api/api.js";
 import Navbar from "../components/Navbar.jsx";
@@ -12,12 +13,12 @@ const PageContainer = styled.div`
 
 const ContentContainer = styled.div`
   max-width: 900px;
-  margin: 40px auto 0;
-  padding: 0 30px;
+  margin: clamp(20px, 4vw, 40px) auto 0;
+  padding: 0 clamp(14px, 3.4vw, 30px);
 `;
 
 const Header = styled.h2`
-  font-size: 28px;
+  font-size: clamp(24px, 4.4vw, 30px);
   font-weight: 600;
   color: ${({ theme }) => theme.text};
   margin-bottom: 24px;
@@ -25,20 +26,22 @@ const Header = styled.h2`
 
 const TableWrapper = styled.div`
   background: ${({ theme }) => theme.cardBg};
-  border-radius: 12px;
+  border-radius: 14px;
   padding: 10px;
   border: 1px solid rgba(255,255,255,0.08);
   box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+  overflow-x: auto;
 `;
 
 const StyledTable = styled.table`
   width: 100%;
   border-collapse: collapse;
+  min-width: 560px;
 `;
 
 const Th = styled.th`
   padding: 14px;
-  font-size: 14px;
+  font-size: 13px;
   color: ${({ theme }) => theme.accent};
   text-align: left;
   border-bottom: 1px solid rgba(255,255,255,0.1);
@@ -46,26 +49,29 @@ const Th = styled.th`
 
 const Td = styled.td`
   padding: 14px;
-  font-size: 15px;
+  font-size: 14px;
   color: ${({ theme }) => theme.cardText};
   border-bottom: 1px solid rgba(255,255,255,0.05);
 `;
 
 const ViewButton = styled.button`
-  background: ${({ theme }) => theme.accent};
+  background: ${({ theme }) => `linear-gradient(180deg, ${theme.accent}, ${theme.accent})`};
   border: none;
-  padding: 8px 14px;
+  padding: 8px 12px;
   border-radius: 8px;
-  color: white;
+  color: ${({ theme }) => theme.onAccent};
   cursor: pointer;
-  transition: 0.25s;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+
   &:hover {
-    transform: translateY(-2px);
+    transform: translateY(-1px);
+    box-shadow: ${({ theme }) => theme.shadowSm};
   }
 `;
 
 export default function AttemptHistory() {
   const [history, setHistory] = useState([]);
+  const navigate = useNavigate();
   const user = JSON.parse(localStorage.getItem("user") || "null");
 
   useEffect(() => {
@@ -105,10 +111,10 @@ export default function AttemptHistory() {
                     <Td>{item.score}/{item.totalQuestions}</Td>
                     <Td>{new Date(item.dateTaken).toLocaleString()}</Td>
                     <Td>
-  <ViewButton onClick={() => window.location.href = `/attempt-history/${item.id}`}>
-    View
-  </ViewButton>
-</Td>
+                      <ViewButton type="button" onClick={() => navigate(`/attempt-history/${item.id}`)}>
+                        View
+                      </ViewButton>
+                    </Td>
 
                   </tr>
                 ))

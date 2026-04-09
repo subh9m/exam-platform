@@ -18,34 +18,34 @@ const PageContainer = styled.div`
 
 const ContentContainer = styled.div`
   max-width: 1200px;
-  margin: 40px auto 0;
-  padding: 0 30px 60px;
-  text-align: left; /* Professional layouts are typically left-aligned */
+  margin: clamp(20px, 4vw, 40px) auto 0;
+  padding: 0 clamp(14px, 3.4vw, 30px) 68px;
+  text-align: left;
 `;
 
 const PageHeader = styled.div`
-  margin-bottom: 40px;
+  margin-bottom: clamp(24px, 5vw, 40px);
 `;
 
 const PageTitle = styled.h1`
-  font-size: 36px;
+  font-size: clamp(28px, 5vw, 38px);
   font-weight: 700;
   color: ${({ theme }) => theme.text};
   margin: 0;
 `;
 
 const PageSubtitle = styled.p`
-  font-size: 18px;
+  font-size: clamp(14px, 2.8vw, 18px);
   font-weight: 400;
   color: ${({ theme }) => theme.cardText};
   margin: 8px 0 0;
 `;
 
 const SectionHeader = styled.h2`
-  font-size: 28px;
+  font-size: clamp(22px, 4.3vw, 30px);
   font-weight: 600;
   color: ${({ theme }) => theme.text};
-  margin: 48px 0 24px;
+  margin: clamp(26px, 5vw, 44px) 0 18px;
 `;
 
 const Grid = styled.div`
@@ -74,7 +74,7 @@ const SubjectCard = styled(motion.div)`
   display: flex;
   flex-direction: column;
   justify-content: space-between; /* Pushes button to the bottom */
-  min-height: 220px; /* Ensures cards have a uniform height */
+  min-height: 216px;
 
   &:hover {
     transform: translateY(-6px) scale(1.02); /* Subtle lift */
@@ -87,7 +87,7 @@ const CardContent = styled.div`
 `;
 
 const SubjectTitle = styled.h3`
-  font-size: 20px;
+  font-size: clamp(18px, 2.6vw, 21px);
   font-weight: 700;
   color: ${({ theme }) => theme.text};
   margin: 0 0 12px 0;
@@ -107,7 +107,7 @@ const SubjectDescription = styled.p`
 `;
 
 const CardActions = styled.div`
-  margin-top: 24px; /* Pushes button away from text */
+  margin-top: 22px;
 `;
 
 const SecondaryButton = styled(motion.button)`

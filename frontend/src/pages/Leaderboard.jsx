@@ -21,14 +21,14 @@ const PageContainer = styled.div`
 
 const ContentContainer = styled.div`
   max-width: 900px;
-  margin: 40px auto 0;
-  padding: 0 30px 60px;
+  margin: clamp(20px, 4vw, 40px) auto 0;
+  padding: 0 clamp(14px, 3.4vw, 30px) 62px;
   text-align: center;
   color: ${({ theme }) => theme.text};
 `;
 
 const Header = styled.h2`
-  font-size: 32px;
+  font-size: clamp(26px, 4.8vw, 34px);
   font-weight: 700;
   margin-bottom: 30px;
   background: linear-gradient(
@@ -46,6 +46,7 @@ const TableWrapper = styled.div`
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
   border: 1px solid rgba(255, 255, 255, 0.05);
   overflow: hidden;
+  overflow-x: auto;
   backdrop-filter: blur(8px);
 `;
 
@@ -53,6 +54,7 @@ const StyledTable = styled.table`
   width: 100%;
   border-collapse: collapse;
   text-align: left;
+  min-width: 560px;
 `;
 
 const TableHead = styled.thead`

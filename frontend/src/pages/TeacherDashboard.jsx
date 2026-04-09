@@ -16,15 +16,15 @@ const PageContainer = styled.div`
 
 const ContentContainer = styled.div`
   max-width: 1000px;
-  margin: 40px auto 0;
-  padding: 0 30px 60px;
+  margin: clamp(20px, 4vw, 40px) auto 0;
+  padding: 0 clamp(14px, 3.4vw, 30px) 68px;
 `;
 
 const Header = styled.h1`
-  font-size: 36px;
+  font-size: clamp(28px, 5vw, 38px);
   font-weight: 700;
   color: ${({ theme }) => theme.text};
-  margin: 0 0 24px;
+  margin: 0 0 clamp(18px, 3vw, 26px);
 `;
 
 const Grid = styled.div`
@@ -60,7 +60,7 @@ const Card = styled(motion.div)`
 `;
 
 const Title = styled.h3`
-  font-size: 20px;
+  font-size: clamp(18px, 2.6vw, 21px);
   color: ${({ theme }) => theme.text};
   margin-bottom: 12px;
 `;

@@ -15,15 +15,46 @@ const PageShell = styled.div`
   overflow-x: hidden;
 `;
 
+const TopBar = styled.header`
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px clamp(14px, 3.4vw, 24px);
+  backdrop-filter: blur(10px);
+`;
+
+const BrandBlock = styled.div`
+  min-width: 0;
+`;
+
+const BrandTitle = styled.h2`
+  margin: 0;
+  font-size: clamp(19px, 3.2vw, 24px);
+  font-weight: 800;
+  color: ${({ theme }) => theme.accent};
+`;
+
+const BrandSub = styled.p`
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: ${({ theme }) => theme.cardText};
+`;
+
 const ContentWrap = styled.div`
   min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 92px 16px 36px;
+  padding: 94px 16px 36px;
 
   @media (max-width: 980px) {
-    padding: 92px 14px 24px;
+    padding: 90px 14px 24px;
   }
 `;
 
@@ -34,7 +65,7 @@ const FormStage = styled(motion.div)`
 
 const LoginFormCard = styled.div`
   width: 100%;
-  border-radius: 16px;
+  border-radius: 18px;
   padding: 30px;
   background: ${({ theme }) => theme.cardBg};
   border: 1px solid ${({ theme }) => theme.borderColor};
@@ -53,35 +84,19 @@ const Header = styled.h2`
   color: ${({ theme }) => theme.text};
 `;
 
-const TopLeftBrand = styled.h2`
-  position: fixed;
-  top: 16px;
-  left: 16px;
-  margin: 0;
-  font-size: 22px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.accent};
-  letter-spacing: 0.5px;
-  z-index: 20;
-`;
-
 const TopRightThemeToggle = styled.button`
-  position: fixed;
-  top: 16px;
-  right: 16px;
-  font-size: 18px;
+  font-size: 13px;
   border: 1px solid ${({ theme }) => theme.borderColor};
   cursor: pointer;
   background: ${({ theme }) => theme.cardBg};
   color: ${({ theme }) => theme.text};
-  padding: 8px 14px;
-  border-radius: 50px;
+  padding: 8px 11px;
+  border-radius: 10px;
   box-shadow: ${({ theme }) => theme.shadowSm};
   transition: all 0.2s ease;
-  z-index: 20;
 
   &:hover {
-    transform: scale(1.08);
+    transform: scale(1.02);
     box-shadow: ${({ theme }) => theme.shadowMd};
   }
 
@@ -267,11 +282,16 @@ export default function Login() {
 
   return (
     <PageShell>
-      <TopLeftBrand>Exam Platform</TopLeftBrand>
+      <TopBar>
+        <BrandBlock>
+          <BrandTitle>Exam Platform</BrandTitle>
+          <BrandSub>{role === "TEACHER" ? "Teacher sign-in mode" : "Student sign-in mode"}</BrandSub>
+        </BrandBlock>
 
-      <TopRightThemeToggle onClick={toggleTheme} aria-label="Toggle theme">
-        {theme === "dark" ? "☀️" : "🌙"}
-      </TopRightThemeToggle>
+        <TopRightThemeToggle onClick={toggleTheme} aria-label="Toggle theme">
+          {theme === "dark" ? "Light" : "Dark"}
+        </TopRightThemeToggle>
+      </TopBar>
 
       <ContentWrap>
         <FormStage

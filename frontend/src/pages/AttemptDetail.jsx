@@ -13,16 +13,16 @@ const PageContainer = styled.div`
 
 const ContentContainer = styled.div`
   max-width: 780px;
-  margin: 36px auto 0;
-  padding: 0 16px;
+  margin: clamp(20px, 4vw, 36px) auto 0;
+  padding: 0 clamp(14px, 3.4vw, 22px);
 `;
 
 const Header = styled.h2`
-  font-size: 28px;
+  font-size: clamp(24px, 4.4vw, 30px);
   font-weight: 700;
   color: ${({ theme }) => theme.text};
-  margin-bottom: 28px;
-  text-align: center;
+  margin-bottom: 20px;
+  text-align: left;
 `;
 
 const TopBackRow = styled.div`
@@ -69,7 +69,7 @@ const QuestionCard = styled.div`
 `;
 
 const QuestionText = styled.p`
-  font-size: 17px;
+  font-size: clamp(16px, 2.6vw, 18px);
   font-weight: 600;
   margin-bottom: 12px;
   color: ${({ theme }) => theme.text};
@@ -117,6 +117,10 @@ const BackButton = styled.button`
   &:hover {
     transform: translateY(-3px);
     box-shadow: 0 12px 28px ${({ theme }) => theme.accent + "55"};
+  }
+
+  @media (max-width: 560px) {
+    width: 100%;
   }
 `;
 

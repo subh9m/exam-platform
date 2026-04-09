@@ -23,20 +23,20 @@ const PageContainer = styled.div`
 `;
 
 const ContentContainer = styled.div`
-  max-width: 780px;
-  margin: 36px auto 0;
-  padding: 0 16px 40px;
+  max-width: 860px;
+  margin: clamp(18px, 4vw, 36px) auto 0;
+  padding: 0 clamp(14px, 3.5vw, 24px) 56px;
 `;
 
 const Header = styled.h2`
-  font-size: 28px;
+  font-size: clamp(24px, 4vw, 32px);
   font-weight: 600;
   margin-bottom: 8px;
   color: ${({ theme }) => theme.text};
 `;
 
 const SubHeader = styled.p`
-  font-size: 14px;
+  font-size: clamp(13px, 2.5vw, 15px);
   color: ${({ theme }) => theme.cardText};
   margin: 0 0 16px 0;
 `;
@@ -86,6 +86,10 @@ const ButtonContainer = styled.div`
   gap: 12px;
   justify-content: center;
   flex-wrap: wrap;
+
+  @media (max-width: 560px) {
+    flex-direction: column;
+  }
 `;
 
 const PrimaryButton = styled.button`
@@ -114,6 +118,10 @@ const PrimaryButton = styled.button`
     cursor: not-allowed;
     box-shadow: none;
     transform: none;
+  }
+
+  @media (max-width: 560px) {
+    width: 100%;
   }
 `;
 
@@ -279,10 +287,6 @@ function Quiz() {
       localStorage.setItem(storageKey, JSON.stringify(next));
       return next;
     });
-  };
-
-  const handleSave = (qId, option) => {
-    localStorage.setItem(storageKey, JSON.stringify({ ...answers, [qId]: option }));
   };
 
   const handleConfirmSubmit = useCallback(async () => {
@@ -529,8 +533,6 @@ function Quiz() {
                 index={idx}
                 selectedAnswer={answers[qId] ?? null}
                 onSelect={handleSelect}
-                onSave={handleSave}
-                isPersisted={!!answers[qId]}
               />
             </div>
           );

@@ -13,12 +13,12 @@ const PageContainer = styled.div`
 
 const ContentContainer = styled.div`
   max-width: 760px;
-  margin: 40px auto 0;
-  padding: 0 30px 60px;
+  margin: clamp(20px, 4vw, 40px) auto 0;
+  padding: 0 clamp(14px, 3.4vw, 30px) 60px;
 `;
 
 const Header = styled.h1`
-  font-size: 34px;
+  font-size: clamp(28px, 5vw, 36px);
   color: ${({ theme }) => theme.text};
   margin: 0 0 10px;
 `;
@@ -36,7 +36,7 @@ const TopBackButton = styled.button`
   border-radius: 8px;
   background: ${({ theme }) => `linear-gradient(180deg, ${theme.accent}, ${theme.accent})`};
   color: ${({ theme }) => theme.onAccent};
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 
@@ -102,10 +102,14 @@ const PrimaryButton = styled(motion.button)`
   cursor: pointer;
   padding: 11px 16px;
   border-radius: 10px;
-  color: #fff;
+  color: ${({ theme }) => theme.onAccent};
   font-weight: 600;
-  background: linear-gradient(180deg, #0052cc, #007aff);
+  background: ${({ theme }) => `linear-gradient(180deg, ${theme.accent}, ${theme.accent})`};
   opacity: ${({ disabled }) => (disabled ? 0.65 : 1)};
+
+  @media (max-width: 600px) {
+    width: 100%;
+  }
 `;
 
 function shuffle(input) {

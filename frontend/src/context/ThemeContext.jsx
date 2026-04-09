@@ -1,49 +1,49 @@
 // src/context/ThemeContext.jsx
 import React, { createContext, useState, useEffect } from "react";
 import { ThemeProvider, createGlobalStyle } from "styled-components";
-import "@fontsource/inter/300.css";
-import "@fontsource/inter/400.css";
-import "@fontsource/inter/500.css";
-import "@fontsource/inter/600.css";
-import "@fontsource/inter/700.css";
+import "@fontsource/manrope/400.css";
+import "@fontsource/manrope/500.css";
+import "@fontsource/manrope/600.css";
+import "@fontsource/manrope/700.css";
+import "@fontsource/manrope/800.css";
 
 // Centralized token themes
 const lightTheme = {
-  bgPrimary: "linear-gradient(180deg, #f6f8fc 0%, #edf2fb 100%)",
+  bgPrimary: "radial-gradient(1200px 420px at 12% -10%, #d8ecff 0%, rgba(216, 236, 255, 0) 58%), linear-gradient(180deg, #f4f8ff 0%, #eaf1fb 100%)",
   bgSecondary: "#ffffff",
-  cardBg: "linear-gradient(180deg, rgba(255,255,255,0.96), rgba(247,250,255,0.92))",
+  cardBg: "linear-gradient(180deg, rgba(255,255,255,0.94), rgba(247,251,255,0.9))",
   inputBg: "#f9fbff",
-  inputBorder: "rgba(16, 32, 57, 0.14)",
+  inputBorder: "rgba(18, 37, 63, 0.16)",
   overlay: "rgba(7, 14, 27, 0.5)",
   onAccent: "#ffffff",
-  textPrimary: "#102039",
-  textSecondary: "#34435b",
-  borderColor: "rgba(16, 32, 57, 0.14)",
-  accent: "#1b74ff",
+  textPrimary: "#0f213d",
+  textSecondary: "#41516b",
+  borderColor: "rgba(18, 37, 63, 0.14)",
+  accent: "#0b7dff",
   success: "#16a34a",
   error: "#dc2626",
-  shadowSm: "0 8px 24px rgba(16, 32, 57, 0.16)",
-  shadowMd: "0 14px 36px rgba(16, 32, 57, 0.22)",
-  shadowLg: "0 24px 58px rgba(16, 32, 57, 0.28)",
+  shadowSm: "0 8px 22px rgba(13, 36, 67, 0.14)",
+  shadowMd: "0 14px 34px rgba(13, 36, 67, 0.2)",
+  shadowLg: "0 22px 52px rgba(13, 36, 67, 0.28)",
 };
 
 const darkTheme = {
-  bgPrimary: "linear-gradient(180deg, #050913 0%, #0a1324 100%)",
+  bgPrimary: "radial-gradient(950px 360px at 8% -10%, rgba(33, 82, 153, 0.32) 0%, rgba(33, 82, 153, 0) 62%), linear-gradient(180deg, #050b16 0%, #0a1324 100%)",
   bgSecondary: "#0f172a",
-  cardBg: "linear-gradient(180deg, rgba(14, 24, 42, 0.9), rgba(10, 18, 32, 0.84))",
+  cardBg: "linear-gradient(180deg, rgba(16, 27, 47, 0.92), rgba(11, 20, 36, 0.88))",
   inputBg: "rgba(255,255,255,0.06)",
-  inputBorder: "rgba(219, 235, 255, 0.24)",
+  inputBorder: "rgba(219, 235, 255, 0.2)",
   overlay: "rgba(4, 10, 21, 0.62)",
   onAccent: "#ffffff",
   textPrimary: "#edf4ff",
-  textSecondary: "rgba(255,255,255,0.9)",
+  textSecondary: "rgba(236, 245, 255, 0.86)",
   borderColor: "rgba(219, 235, 255, 0.16)",
-  accent: "#3f98ff",
+  accent: "#4ca1ff",
   success: "#22c55e",
   error: "#ef4444",
-  shadowSm: "0 10px 26px rgba(0, 0, 0, 0.26)",
-  shadowMd: "0 16px 40px rgba(0, 0, 0, 0.34)",
-  shadowLg: "0 24px 62px rgba(0, 0, 0, 0.44)",
+  shadowSm: "0 10px 24px rgba(0, 0, 0, 0.28)",
+  shadowMd: "0 16px 36px rgba(0, 0, 0, 0.36)",
+  shadowLg: "0 24px 56px rgba(0, 0, 0, 0.44)",
 };
 
 const withBackwardCompatibility = (tokens) => ({
@@ -61,7 +61,7 @@ const GlobalStyle = createGlobalStyle`
     margin: 0;
     padding: 0;
     box-sizing: border-box;
-    font-family: "Inter", sans-serif; /* ✅ Apply globally */
+    font-family: "Manrope", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
   }
 
   html, body, #root {
@@ -71,7 +71,24 @@ const GlobalStyle = createGlobalStyle`
   body {
     background: ${({ theme }) => theme.bgPrimary};
     color: ${({ theme }) => theme.textPrimary};
+    line-height: 1.45;
     transition: background 0.3s ease, color 0.3s ease;
+  }
+
+  a {
+    color: inherit;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+
+  ::selection {
+    background: ${({ theme }) => theme.accent + "44"};
+    color: ${({ theme }) => theme.textPrimary};
   }
 `;
 

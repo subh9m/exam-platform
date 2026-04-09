@@ -15,18 +15,18 @@ const Page = styled.div`
 
 const Card = styled.div`
   width: min(460px, 100%);
-  border-radius: 14px;
+  border-radius: 16px;
   background: ${({ theme }) => theme.cardBg};
   border: 1px solid ${({ theme }) => theme.borderColor};
   box-shadow: ${({ theme }) => theme.shadowLg};
-  padding: 26px;
+  padding: 24px;
   text-align: center;
 `;
 
 const Title = styled.h2`
   margin: 0 0 10px;
   color: ${({ theme }) => theme.text};
-  font-size: 24px;
+  font-size: clamp(22px, 4vw, 26px);
 `;
 
 const Text = styled.p`

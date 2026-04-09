@@ -14,8 +14,8 @@ const PageContainer = styled.div`
 
 const ContentContainer = styled.div`
   max-width: 1000px;
-  margin: 40px auto 0;
-  padding: 0 30px 60px;
+  margin: clamp(20px, 4vw, 40px) auto 0;
+  padding: 0 clamp(14px, 3.4vw, 30px) 64px;
 `;
 
 const HeaderRow = styled.div`
@@ -55,7 +55,7 @@ const TopBackButton = styled.button`
 `;
 
 const Title = styled.h1`
-  font-size: 32px;
+  font-size: clamp(26px, 4.8vw, 34px);
   font-weight: 700;
   color: ${({ theme }) => theme.text};
   margin: 0;
@@ -113,7 +113,7 @@ const Card = styled.div`
 const QuestionText = styled.h3`
   color: ${({ theme }) => theme.text};
   margin: 0;
-  font-size: 19px;
+  font-size: clamp(17px, 2.5vw, 20px);
 `;
 
 const Meta = styled.p`
