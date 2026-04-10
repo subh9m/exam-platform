@@ -89,7 +89,11 @@ public class AuthController {
             // Check user credentials first
             userService.login(email, password);
         } catch (Exception ex) {
-            return ResponseEntity.status(400).body(Map.of("message", "Invalid email or password"));
+            String message = ex.getMessage();
+            if (message == null || message.isBlank()) {
+                message = "Invalid email or password";
+            }
+            return ResponseEntity.status(400).body(Map.of("message", message));
         }
 
         try {

@@ -6,6 +6,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+
 @Service
 public class UserService {
 
@@ -25,7 +27,7 @@ public class UserService {
         }
 
         // Prevent duplicate email
-        if (userRepository.findByEmail(user.getEmail()) != null) {
+        if (userRepository.findByEmailIgnoreCase(user.getEmail()) != null) {
             throw new RuntimeException("Email already exists");
         }
 
@@ -40,20 +42,40 @@ public class UserService {
 
         email = normalizeEmail(email);
 
-        User user = userRepository.findByEmailIgnoreCase(email);
-        if (user == null) {
+        if (email.isBlank() || rawPassword == null || rawPassword.isBlank()) {
             throw new RuntimeException("Invalid email or password");
         }
 
-        // ✅ Match raw password with encoded password
-        if (passwordEncoder.matches(rawPassword, user.getPassword())) {
-            return user;
+        List<User> users = userRepository.findAllByEmailIgnoreCase(email);
+        if (users == null || users.isEmpty()) {
+            throw new RuntimeException("Invalid email or password");
         }
 
-        // Backward-compatible fallback for old local records saved as plaintext passwords.
-        if (rawPassword != null && rawPassword.equals(user.getPassword())) {
-            user.setPassword(passwordEncoder.encode(rawPassword));
-            return userRepository.save(user);
+        boolean hasGoogleOnlyAccount = false;
+
+        for (User user : users) {
+            String storedPassword = user.getPassword();
+            if (storedPassword == null || storedPassword.isBlank()) {
+                if ("GOOGLE".equalsIgnoreCase(String.valueOf(user.getAuthProvider()))) {
+                    hasGoogleOnlyAccount = true;
+                }
+                continue;
+            }
+
+            // ✅ Match raw password with encoded password
+            if (matchesEncoded(rawPassword, storedPassword)) {
+                return user;
+            }
+
+            // Backward-compatible fallback for old local records saved as plaintext passwords.
+            if (rawPassword.equals(storedPassword)) {
+                user.setPassword(passwordEncoder.encode(rawPassword));
+                return userRepository.save(user);
+            }
+        }
+
+        if (hasGoogleOnlyAccount) {
+            throw new RuntimeException("This account uses Google sign-in. Please continue with Google.");
         }
 
         throw new RuntimeException("Invalid email or password");
@@ -138,5 +160,14 @@ public class UserService {
 
     private String normalizeEmail(String email) {
         return email == null ? "" : email.trim().toLowerCase();
+    }
+
+    private boolean matchesEncoded(String rawPassword, String encodedPassword) {
+        try {
+            return passwordEncoder.matches(rawPassword, encodedPassword);
+        } catch (IllegalArgumentException ex) {
+            // Ignore malformed legacy password payloads and allow fallback checks.
+            return false;
+        }
     }
 }
