@@ -55,7 +55,7 @@ function resolveGoogleAuthUrl() {
   return `${backendBase}/oauth2/authorization/google`;
 }
 
-export default function GoogleAuthButton({ mode = "login", disabled = false }) {
+export default function GoogleAuthButton({ mode = "login", disabled = false, selectedRole = "STUDENT" }) {
   const [redirecting, setRedirecting] = useState(false);
 
   const label = useMemo(() => {
@@ -64,6 +64,11 @@ export default function GoogleAuthButton({ mode = "login", disabled = false }) {
 
   const handleClick = () => {
     if (disabled || redirecting) return;
+
+    const normalizedRole = String(selectedRole || "STUDENT").toUpperCase() === "TEACHER" ? "TEACHER" : "STUDENT";
+    sessionStorage.setItem("oauthSelectedRole", normalizedRole);
+    sessionStorage.setItem("oauthSourceMode", mode);
+
     setRedirecting(true);
     window.location.href = resolveGoogleAuthUrl();
   };

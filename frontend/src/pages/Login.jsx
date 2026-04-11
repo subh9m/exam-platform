@@ -261,7 +261,6 @@ export default function Login() {
 
   const handleRoleSwitch = (nextRole) => {
     setRole(nextRole);
-    setRoleMode(nextRole);
     setStep(1);
     setOtp("");
   };
@@ -316,7 +315,7 @@ export default function Login() {
       localStorage.setItem("user", JSON.stringify(res.data.user));
       setRoleMode(responseRole || role);
       showSnackbar("OTP verified. Login successful.", "success");
-      navigate("/dashboard");
+      navigate((responseRole || role) === "TEACHER" ? "/teacher/dashboard" : "/dashboard");
     } catch (err) {
       const msg = err?.response?.data?.message || "OTP verification failed. Please try again.";
       showSnackbar(msg, "error");
@@ -397,7 +396,7 @@ export default function Login() {
                       ) : "Send OTP"}
                     </SubmitButton>
 
-                    <GoogleAuthButton mode="login" disabled={sendingOtp || verifyingOtp} />
+                    <GoogleAuthButton mode="login" selectedRole={role} disabled={sendingOtp || verifyingOtp} />
                   </Form>
                 )}
 

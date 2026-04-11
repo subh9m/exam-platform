@@ -25,6 +25,41 @@ public class AuthController {
     }
 
     // ---------------------------------------------------
+    // 0) OAUTH LOGIN VALIDATION: VERIFY TOKEN + ROLE
+    // ---------------------------------------------------
+    @PostMapping("/oauth-login")
+    public ResponseEntity<?> oauthLogin(@RequestBody Map<String, String> body) {
+        String token = body.get("token");
+        String requestedRole = body.get("role");
+
+        if (token == null || token.isBlank()) {
+            return ResponseEntity.status(400).body(Map.of("message", "OAuth token is required"));
+        }
+
+        final String userId;
+        try {
+            userId = jwtUtil.extractUserId(token);
+        } catch (Exception ex) {
+            return ResponseEntity.status(401).body(Map.of("message", "Invalid or expired OAuth token"));
+        }
+
+        User user = userService.findById(userId);
+        if (user == null) {
+            return ResponseEntity.status(401).body(Map.of("message", "Invalid OAuth session"));
+        }
+
+        if (requestedRole != null && !requestedRole.isBlank()) {
+            String normalized = requestedRole.trim().toUpperCase();
+            String userRole = user.getRole() == null ? "" : user.getRole().trim().toUpperCase();
+            if (!normalized.equals(userRole)) {
+                return ResponseEntity.status(403).body(Map.of("message", "Invalid role for this login portal"));
+            }
+        }
+
+        return ResponseEntity.ok(Map.of("user", AuthUserDto.from(user), "token", token));
+    }
+
+    // ---------------------------------------------------
     // 1) REGISTER STEP 1: SEND OTP
     // ---------------------------------------------------
     @PostMapping("/send-otp/register")

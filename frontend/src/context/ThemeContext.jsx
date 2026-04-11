@@ -132,12 +132,6 @@ export const ThemeContextProvider = ({ children }) => {
       setMode(prefersDark ? "dark" : "light");
     }
 
-    const savedRoleMode = localStorage.getItem("appRoleMode");
-    if (savedRoleMode) {
-      setRoleModeState(savedRoleMode.toUpperCase() === "TEACHER" ? "TEACHER" : "STUDENT");
-      return;
-    }
-
     try {
       const rawUser = localStorage.getItem("user");
       const user = rawUser ? JSON.parse(rawUser) : null;

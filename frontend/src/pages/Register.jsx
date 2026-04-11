@@ -264,7 +264,6 @@ export default function Register() {
 
   const handleRoleSwitch = (nextRole) => {
     setRole(nextRole);
-    setRoleMode(nextRole);
     setStep(1);
     setOtp("");
   };
@@ -317,7 +316,7 @@ export default function Register() {
       setRoleMode(String(res?.data?.user?.role || role).toUpperCase());
 
       showSnackbar("OTP verified. Registration successful.", "info");
-      navigate("/dashboard");
+      navigate(String(res?.data?.user?.role || role).toUpperCase() === "TEACHER" ? "/teacher/dashboard" : "/dashboard");
     } catch (err) {
       const msg = err?.response?.data?.message || "OTP verification failed. Please try again.";
       showSnackbar(msg, "error");
@@ -408,7 +407,7 @@ export default function Register() {
                       ) : "Send OTP"}
                     </SubmitButton>
 
-                    <GoogleAuthButton mode="register" disabled={sendingOtp || verifyingOtp} />
+                    <GoogleAuthButton mode="register" selectedRole={role} disabled={sendingOtp || verifyingOtp} />
                   </Form>
                 )}
 
