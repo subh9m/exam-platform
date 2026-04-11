@@ -40,9 +40,13 @@ public class OtpService {
         purpose = purpose.toUpperCase().trim();
         Instant now = Instant.now();
 
-        long recentRequests = otpRepo.countByEmailAndCreatedAtAfter(email, now.minus(OTP_RATE_LIMIT_WINDOW));
+        long recentRequests = otpRepo.countByEmailAndPurposeAndCreatedAtAfter(
+                email,
+                purpose,
+                now.minus(OTP_RATE_LIMIT_WINDOW)
+        );
         if (recentRequests >= MAX_OTP_REQUESTS_PER_WINDOW) {
-            throw new IllegalStateException("Too many OTP requests. Maximum 3 requests in 5 minutes.");
+            throw new IllegalStateException("Too many OTP requests. Maximum 3 requests in 5 minutes for this action.");
         }
 
         String code = String.format("%06d", rnd.nextInt(1_000_000));

@@ -55,7 +55,7 @@ public class UserService {
         boolean hasLocalAccount = false;
 
         for (User user : users) {
-            String provider = normalizeAuthProvider(user.getAuthProvider());
+            String provider = inferAuthProvider(user);
             if ("GOOGLE".equals(provider)) {
                 hasGoogleAccount = true;
             } else {
@@ -68,7 +68,7 @@ public class UserService {
         }
 
         for (User user : users) {
-            String provider = normalizeAuthProvider(user.getAuthProvider());
+            String provider = inferAuthProvider(user);
             if ("GOOGLE".equals(provider)) {
                 continue;
             }
@@ -113,7 +113,7 @@ public class UserService {
         boolean hasLocal = false;
 
         for (User user : users) {
-            String provider = normalizeAuthProvider(user.getAuthProvider());
+            String provider = inferAuthProvider(user);
             if ("GOOGLE".equals(provider)) {
                 hasGoogle = true;
             } else {
@@ -140,7 +140,7 @@ public class UserService {
         }
 
         for (User user : users) {
-            if (!"GOOGLE".equals(normalizeAuthProvider(user.getAuthProvider()))) {
+            if (!"GOOGLE".equals(inferAuthProvider(user))) {
                 return user;
             }
         }
@@ -190,9 +190,9 @@ public class UserService {
             }
 
             String currentProviderRaw = linkedByGoogle.getAuthProvider();
-            String normalizedProvider = normalizeAuthProvider(currentProviderRaw);
+            String normalizedProvider = inferAuthProvider(linkedByGoogle);
             if (currentProviderRaw == null || currentProviderRaw.isBlank()) {
-                linkedByGoogle.setAuthProvider("GOOGLE");
+                linkedByGoogle.setAuthProvider(normalizedProvider);
                 changed = true;
             } else if (!normalizedProvider.equalsIgnoreCase(currentProviderRaw)) {
                 linkedByGoogle.setAuthProvider(normalizedProvider);
@@ -223,9 +223,9 @@ public class UserService {
             }
 
             String currentProviderRaw = existingByEmail.getAuthProvider();
-            String normalizedProvider = normalizeAuthProvider(currentProviderRaw);
+            String normalizedProvider = inferAuthProvider(existingByEmail);
             if (currentProviderRaw == null || currentProviderRaw.isBlank()) {
-                existingByEmail.setAuthProvider("LOCAL");
+                existingByEmail.setAuthProvider(normalizedProvider);
             } else if (!normalizedProvider.equalsIgnoreCase(currentProviderRaw)) {
                 existingByEmail.setAuthProvider(normalizedProvider);
             }
@@ -266,9 +266,33 @@ public class UserService {
 
     private String normalizeAuthProvider(String provider) {
         String normalized = provider == null ? "" : provider.trim().toUpperCase();
+        if ("EMAIL".equals(normalized)) {
+            return "LOCAL";
+        }
         if ("GOOGLE".equals(normalized)) {
             return "GOOGLE";
         }
+        return "LOCAL";
+    }
+
+    private String inferAuthProvider(User user) {
+        if (user == null) {
+            return "LOCAL";
+        }
+
+        String explicit = normalizeAuthProvider(user.getAuthProvider());
+        String raw = user.getAuthProvider() == null ? "" : user.getAuthProvider().trim();
+        if (!raw.isBlank()) {
+            return explicit;
+        }
+
+        boolean hasGoogleLink = user.getGoogleId() != null && !user.getGoogleId().isBlank();
+        boolean hasPassword = user.getPassword() != null && !user.getPassword().isBlank();
+
+        if (hasGoogleLink && !hasPassword) {
+            return "GOOGLE";
+        }
+
         return "LOCAL";
     }
 
