@@ -8,4 +8,6 @@ public interface QuizResultRepository extends MongoRepository<QuizResult, String
     List<QuizResult> findByUserIdOrderByDateTakenDesc(String userId);
     List<QuizResult> findByTestId(String testId);
     List<QuizResult> findByTestIdIn(List<String> testIds);
+    void deleteByUserId(String userId);
+    void deleteByTestIdIn(List<String> testIds);
 }

@@ -90,8 +90,13 @@ public class UserService {
     }
 
     public User findOrCreateGoogleUser(String email, String displayName, String googleId) {
+        return findOrCreateGoogleUser(email, displayName, googleId, "STUDENT");
+    }
+
+    public User findOrCreateGoogleUser(String email, String displayName, String googleId, String requestedRole) {
         String normalizedEmail = normalizeEmail(email);
         String normalizedGoogleId = googleId == null ? "" : googleId.trim();
+        String normalizedRequestedRole = normalizeRequestedRole(requestedRole);
 
         if (normalizedEmail.isBlank()) {
             throw new RuntimeException("Google account email is unavailable");
@@ -113,9 +118,12 @@ public class UserService {
                 linkedByGoogle.setUsername(displayName.trim());
                 changed = true;
             }
-            if (linkedByGoogle.getRole() == null || linkedByGoogle.getRole().isBlank()) {
-                linkedByGoogle.setRole("STUDENT");
+            String existingRole = normalizeExistingRole(linkedByGoogle.getRole());
+            if (existingRole.isBlank()) {
+                linkedByGoogle.setRole(normalizedRequestedRole);
                 changed = true;
+            } else if (!existingRole.equals(normalizedRequestedRole)) {
+                throw new RuntimeException("Invalid role for this login portal");
             }
             if (!"GOOGLE".equalsIgnoreCase(linkedByGoogle.getAuthProvider())) {
                 linkedByGoogle.setAuthProvider("GOOGLE");
@@ -130,13 +138,18 @@ public class UserService {
 
         User existingByEmail = userRepository.findByEmailIgnoreCase(normalizedEmail);
         if (existingByEmail != null) {
+            String existingRole = normalizeExistingRole(existingByEmail.getRole());
+            if (!existingRole.isBlank() && !existingRole.equals(normalizedRequestedRole)) {
+                throw new RuntimeException("Invalid role for this login portal");
+            }
+
             existingByEmail.setGoogleId(normalizedGoogleId);
             if ((existingByEmail.getUsername() == null || existingByEmail.getUsername().isBlank())
                     && displayName != null && !displayName.isBlank()) {
                 existingByEmail.setUsername(displayName.trim());
             }
             if (existingByEmail.getRole() == null || existingByEmail.getRole().isBlank()) {
-                existingByEmail.setRole("STUDENT");
+                existingByEmail.setRole(normalizedRequestedRole);
             }
             existingByEmail.setVerified(true);
             if (existingByEmail.getAuthProvider() == null || existingByEmail.getAuthProvider().isBlank()) {
@@ -149,7 +162,7 @@ public class UserService {
         created.setEmail(normalizedEmail);
         created.setGoogleId(normalizedGoogleId);
         created.setAuthProvider("GOOGLE");
-        created.setRole("STUDENT");
+        created.setRole(normalizedRequestedRole);
         created.setVerified(true);
         created.setPassword(null);
         created.setUsername((displayName == null || displayName.isBlank())
@@ -160,6 +173,19 @@ public class UserService {
 
     private String normalizeEmail(String email) {
         return email == null ? "" : email.trim().toLowerCase();
+    }
+
+    private String normalizeRequestedRole(String role) {
+        String normalized = role == null ? "" : role.trim().toUpperCase();
+        return "TEACHER".equals(normalized) ? "TEACHER" : "STUDENT";
+    }
+
+    private String normalizeExistingRole(String role) {
+        String normalized = role == null ? "" : role.trim().toUpperCase();
+        if (normalized.isBlank()) {
+            return "";
+        }
+        return "TEACHER".equals(normalized) ? "TEACHER" : "STUDENT";
     }
 
     private boolean matchesEncoded(String rawPassword, String encodedPassword) {

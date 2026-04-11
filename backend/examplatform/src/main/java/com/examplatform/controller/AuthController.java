@@ -5,14 +5,20 @@ import com.examplatform.model.User;
 import com.examplatform.security.JwtUtil;
 import com.examplatform.service.OtpService;
 import com.examplatform.service.UserService;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.io.IOException;
 import java.util.Map;
 
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
+
+    private static final String OAUTH_ROLE_COOKIE = "oauth_portal_role";
 
     private final UserService userService;
     private final OtpService otpService;
@@ -22,6 +28,25 @@ public class AuthController {
         this.userService = userService;
         this.otpService = otpService;
         this.jwtUtil = jwtUtil;
+    }
+
+    // ---------------------------------------------------
+    // -1) OAUTH START: STORE PORTAL ROLE + REDIRECT
+    // ---------------------------------------------------
+    @GetMapping("/oauth/start")
+    public void startOauth(@RequestParam(name = "role", required = false) String role,
+                           HttpServletRequest request,
+                           HttpServletResponse response) throws IOException {
+        String normalizedRole = "TEACHER".equalsIgnoreCase(role) ? "TEACHER" : "STUDENT";
+
+        Cookie cookie = new Cookie(OAUTH_ROLE_COOKIE, normalizedRole);
+        cookie.setHttpOnly(true);
+        cookie.setPath("/");
+        cookie.setMaxAge(300);
+        cookie.setSecure(request.isSecure());
+        response.addCookie(cookie);
+
+        response.sendRedirect("/oauth2/authorization/google");
     }
 
     // ---------------------------------------------------

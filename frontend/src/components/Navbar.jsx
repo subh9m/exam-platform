@@ -1,8 +1,11 @@
 // src/components/Navbar.jsx
-import React, { useContext } from "react";
+import React, { useContext, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import styled from "styled-components";
+import { AnimatePresence, motion } from "framer-motion";
 import { ThemeContext } from "../context/ThemeContext.jsx";
+import { useSnackbar } from "../context/SnackbarContext.jsx";
+import api from "../api/api.js";
 
 // -------------------- STYLED COMPONENTS --------------------
 
@@ -106,6 +109,31 @@ const ActionGroup = styled.div`
   }
 `;
 
+const IconButton = styled.button`
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 7px 12px;
+  border-radius: 9px;
+  background: transparent;
+  color: ${({ theme }) => theme.text};
+  border: 1px solid ${({ theme }) => theme.borderColor};
+  transition: all 0.2s ease;
+
+  &:hover,
+  &:focus-visible {
+    transform: scale(1.05);
+    background: ${({ theme }) => theme.roleAccent + "1f"};
+    box-shadow: 0 10px 22px ${({ theme }) => theme.roleAccent + "33"};
+    outline: none;
+  }
+
+  &:active {
+    transform: scale(0.98);
+  }
+`;
+
 const StyledLink = styled(Link)`
   display: inline-block;
   padding: 8px 10px;
@@ -124,30 +152,6 @@ const StyledLink = styled(Link)`
     color: ${({ theme }) => theme.text};
     background: ${({ theme }) => theme.accent + "20"};
     outline: none;
-  }
-`;
-
-const LogoutButton = styled.button`
-  font-family: inherit;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  padding: 7px 12px;
-  border-radius: 9px;
-  background: transparent;
-  color: ${({ theme }) => theme.text};
-  border: 1px solid ${({ theme }) => theme.borderColor};
-  transition: all 0.2s ease;
-
-  &:hover,
-  &:focus-visible {
-    background: ${({ theme }) => theme.accent + "1f"};
-    box-shadow: ${({ theme }) => theme.shadowSm};
-    outline: none;
-  }
-
-  &:active {
-    transform: scale(0.98);
   }
 `;
 
@@ -170,19 +174,164 @@ const ThemeToggle = styled.button`
   }
 `;
 
+const ModalBackdrop = styled(motion.div)`
+  position: fixed;
+  inset: 0;
+  background: ${({ theme }) => theme.overlay};
+  backdrop-filter: blur(7px);
+  z-index: 2100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+`;
+
+const ModalCard = styled(motion.div)`
+  width: min(480px, 100%);
+  border-radius: 16px;
+  background: ${({ theme }) => theme.cardBg};
+  border: 1px solid ${({ theme }) => theme.borderColor};
+  box-shadow: ${({ theme }) => theme.shadowLg};
+  padding: 20px;
+`;
+
+const ModalTitle = styled.h3`
+  margin: 0;
+  color: ${({ theme }) => theme.text};
+  font-size: 20px;
+`;
+
+const Section = styled.section`
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid ${({ theme }) => theme.borderColor};
+`;
+
+const SectionTitle = styled.p`
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: ${({ theme }) => theme.cardText};
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+`;
+
+const SectionText = styled.p`
+  margin: 0 0 12px;
+  color: ${({ theme }) => theme.cardText};
+  font-size: 14px;
+`;
+
+const ModalButtonRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+`;
+
+const ActionButton = styled.button`
+  border: 1px solid ${({ theme }) => theme.borderColor};
+  background: ${({ theme }) => theme.roleAccent + "1a"};
+  color: ${({ theme }) => theme.text};
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover:not(:disabled) {
+    transform: scale(1.05);
+    box-shadow: 0 10px 22px ${({ theme }) => theme.roleAccent + "33"};
+  }
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+`;
+
+const DangerButton = styled(ActionButton)`
+  border-color: ${({ theme }) => theme.error};
+  background: ${({ theme }) => theme.error + "1f"};
+  color: ${({ theme }) => theme.error};
+
+  &:hover:not(:disabled) {
+    box-shadow: 0 10px 22px ${({ theme }) => theme.error + "44"};
+  }
+`;
+
+const ConfirmInput = styled.input`
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid ${({ theme }) => theme.borderColor};
+  background: ${({ theme }) => theme.inputBg};
+  color: ${({ theme }) => theme.textPrimary};
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  transition: all 0.2s ease;
+
+  &:focus {
+    outline: none;
+    border-color: ${({ theme }) => theme.roleAccent};
+    box-shadow: 0 0 0 3px ${({ theme }) => theme.roleAccent + "33"};
+  }
+`;
+
 // -------------------- MAIN COMPONENT --------------------
 
 function Navbar() {
   const navigate = useNavigate();
-  const { theme, toggleTheme } = useContext(ThemeContext);
-  const user = JSON.parse(localStorage.getItem("user") || "null");
+  const { theme, toggleTheme, setRoleMode } = useContext(ThemeContext);
+  const { showSnackbar } = useSnackbar();
+  let user = null;
+  try {
+    user = JSON.parse(localStorage.getItem("user") || "null");
+  } catch {
+    user = null;
+  }
   const isTeacher = (user?.role || "STUDENT").toUpperCase() === "TEACHER";
   const displayName = user?.username || user?.email || "User";
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [confirmDeleteText, setConfirmDeleteText] = useState("");
+  const [deletingAccount, setDeletingAccount] = useState(false);
 
-  const handleLogout = () => {
+  const resetAuthState = () => {
     localStorage.removeItem("user");
     localStorage.removeItem("token");
+    localStorage.removeItem("appRoleMode");
+    sessionStorage.removeItem("oauthSelectedRole");
+    sessionStorage.removeItem("oauthSourceMode");
+    setRoleMode("STUDENT");
+  };
+
+  const handleLogout = () => {
+    resetAuthState();
+    setSettingsOpen(false);
+    showSnackbar("Logged out successfully.", "info");
     navigate("/");
+  };
+
+  const handleDeleteAccount = async () => {
+    if (deletingAccount) return;
+    if (confirmDeleteText.trim().toUpperCase() !== "DELETE") {
+      showSnackbar('Type "DELETE" to confirm account deletion.', "error");
+      return;
+    }
+
+    try {
+      setDeletingAccount(true);
+      await api.delete("/user/delete-account");
+      resetAuthState();
+      setSettingsOpen(false);
+      showSnackbar("Account deleted successfully", "success");
+      navigate("/");
+    } catch (err) {
+      const msg = err?.response?.data?.message || "Unable to delete account right now.";
+      showSnackbar(msg, "error");
+    } finally {
+      setDeletingAccount(false);
+    }
   };
 
   return (
@@ -217,9 +366,66 @@ function Navbar() {
           <ThemeToggle onClick={toggleTheme} aria-label="Toggle theme">
             {theme === "dark" ? "Light" : "Dark"}
           </ThemeToggle>
-          <LogoutButton onClick={handleLogout}>Logout</LogoutButton>
+          <IconButton type="button" onClick={() => setSettingsOpen(true)} aria-label="Open settings">
+            Settings
+          </IconButton>
         </ActionGroup>
       </LinksContainer>
+
+      <AnimatePresence>
+        {settingsOpen ? (
+          <ModalBackdrop
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2, ease: "easeInOut" }}
+            onClick={() => {
+              if (!deletingAccount) {
+                setSettingsOpen(false);
+                setConfirmDeleteText("");
+              }
+            }}
+          >
+            <ModalCard
+              initial={{ opacity: 0, scale: 0.96, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 10 }}
+              transition={{ duration: 0.2, ease: "easeInOut" }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <ModalTitle>Settings</ModalTitle>
+
+              <Section>
+                <SectionTitle>Session</SectionTitle>
+                <SectionText>End your current session on this device.</SectionText>
+                <ModalButtonRow>
+                  <ActionButton type="button" onClick={handleLogout}>Logout</ActionButton>
+                </ModalButtonRow>
+              </Section>
+
+              <Section>
+                <SectionTitle>Danger Zone</SectionTitle>
+                <SectionText>This action is irreversible. Type DELETE to confirm account deletion.</SectionText>
+                <ConfirmInput
+                  type="text"
+                  value={confirmDeleteText}
+                  onChange={(e) => setConfirmDeleteText(e.target.value)}
+                  placeholder='Type "DELETE"'
+                />
+                <ModalButtonRow>
+                  <DangerButton
+                    type="button"
+                    disabled={deletingAccount || confirmDeleteText.trim().toUpperCase() !== "DELETE"}
+                    onClick={handleDeleteAccount}
+                  >
+                    {deletingAccount ? "Deleting..." : "Delete Account"}
+                  </DangerButton>
+                </ModalButtonRow>
+              </Section>
+            </ModalCard>
+          </ModalBackdrop>
+        ) : null}
+      </AnimatePresence>
 
     </NavContainer>
   );

@@ -4,6 +4,7 @@ import com.examplatform.dto.auth.AuthUserDto;
 import com.examplatform.model.User;
 import com.examplatform.service.UserService;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -20,6 +21,8 @@ import java.util.Base64;
 
 @Component
 public class OAuth2AuthenticationSuccessHandler implements AuthenticationSuccessHandler {
+
+    private static final String OAUTH_ROLE_COOKIE = "oauth_portal_role";
 
     private final JwtUtil jwtUtil;
     private final UserService userService;
@@ -47,8 +50,9 @@ public class OAuth2AuthenticationSuccessHandler implements AuthenticationSuccess
             String email = asString(oauth2User.getAttribute("email"));
             String googleId = asString(oauth2User.getAttribute("sub"));
             String displayName = resolveDisplayName(oauth2User, email);
+            String requestedRole = resolveRequestedRole(request);
 
-            User user = userService.findOrCreateGoogleUser(email, displayName, googleId);
+            User user = userService.findOrCreateGoogleUser(email, displayName, googleId, requestedRole);
             String token = jwtUtil.generateToken(user.getId());
 
             String userJson = objectMapper.writeValueAsString(AuthUserDto.from(user));
@@ -59,10 +63,35 @@ public class OAuth2AuthenticationSuccessHandler implements AuthenticationSuccess
             String target = normalizeBaseUrl(redirectBaseUrl)
                     + "/auth/google/callback#token=" + urlEncode(token)
                     + "&user=" + urlEncode(encodedUser);
+            clearRoleCookie(response);
             response.sendRedirect(target);
         } catch (Exception ex) {
+            clearRoleCookie(response);
             response.sendRedirect(buildErrorRedirect("Google sign-in failed"));
         }
+    }
+
+    private String resolveRequestedRole(HttpServletRequest request) {
+        Cookie[] cookies = request.getCookies();
+        if (cookies == null || cookies.length == 0) {
+            return "STUDENT";
+        }
+
+        for (Cookie cookie : cookies) {
+            if (cookie != null && OAUTH_ROLE_COOKIE.equals(cookie.getName())) {
+                String value = asString(cookie.getValue()).toUpperCase();
+                return "TEACHER".equals(value) ? "TEACHER" : "STUDENT";
+            }
+        }
+
+        return "STUDENT";
+    }
+
+    private void clearRoleCookie(HttpServletResponse response) {
+        Cookie cookie = new Cookie(OAUTH_ROLE_COOKIE, "");
+        cookie.setPath("/");
+        cookie.setMaxAge(0);
+        response.addCookie(cookie);
     }
 
     private String resolveDisplayName(OAuth2User oauth2User, String fallbackEmail) {

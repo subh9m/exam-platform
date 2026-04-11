@@ -49,10 +49,10 @@ const GoogleIcon = styled.span`
   border: 1px solid #d7d7d7;
 `;
 
-function resolveGoogleAuthUrl() {
+function resolveGoogleAuthUrl(selectedRole = "STUDENT") {
   const base = String(api.defaults.baseURL || "http://localhost:8080/api").trim().replace(/\/+$/, "");
-  const backendBase = base.replace(/\/api\/?$/, "");
-  return `${backendBase}/oauth2/authorization/google`;
+  const normalizedRole = String(selectedRole || "STUDENT").toUpperCase() === "TEACHER" ? "TEACHER" : "STUDENT";
+  return `${base}/auth/oauth/start?role=${encodeURIComponent(normalizedRole)}`;
 }
 
 export default function GoogleAuthButton({ mode = "login", disabled = false, selectedRole = "STUDENT" }) {
@@ -70,7 +70,7 @@ export default function GoogleAuthButton({ mode = "login", disabled = false, sel
     sessionStorage.setItem("oauthSourceMode", mode);
 
     setRedirecting(true);
-    window.location.href = resolveGoogleAuthUrl();
+    window.location.href = resolveGoogleAuthUrl(normalizedRole);
   };
 
   return (
