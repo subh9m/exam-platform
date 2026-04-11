@@ -3,6 +3,7 @@ import React, { useContext, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import styled from "styled-components";
 import { AnimatePresence, motion } from "framer-motion";
+import { createPortal } from "react-dom";
 import { ThemeContext } from "../context/ThemeContext.jsx";
 import { useSnackbar } from "../context/SnackbarContext.jsx";
 import api from "../api/api.js";
@@ -23,6 +24,7 @@ const NavContainer = styled.nav`
   box-shadow: ${({ theme }) => theme.shadowSm};
   backdrop-filter: blur(12px);
   transition: all 0.2s ease;
+  overflow: visible;
 
   @media (max-width: 860px) {
     flex-direction: column;
@@ -177,9 +179,9 @@ const ThemeToggle = styled.button`
 const ModalBackdrop = styled(motion.div)`
   position: fixed;
   inset: 0;
-  background: ${({ theme }) => theme.overlay};
+  background: rgba(0, 0, 0, 0.56);
   backdrop-filter: blur(7px);
-  z-index: 2100;
+  z-index: 9999;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -307,6 +309,7 @@ function Navbar() {
 
   const handleLogout = () => {
     resetAuthState();
+    setConfirmDeleteText("");
     setSettingsOpen(false);
     showSnackbar("Logged out successfully.", "info");
     navigate("/");
@@ -321,8 +324,19 @@ function Navbar() {
 
     try {
       setDeletingAccount(true);
-      await api.delete("/user/delete-account");
+      const token = localStorage.getItem("token");
+      if (!token) {
+        showSnackbar("Unauthorized. Please login again.", "error");
+        return;
+      }
+
+      await api.delete("/user/delete-account", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
       resetAuthState();
+      setConfirmDeleteText("");
       setSettingsOpen(false);
       showSnackbar("Account deleted successfully", "success");
       navigate("/");
@@ -371,61 +385,65 @@ function Navbar() {
           </IconButton>
         </ActionGroup>
       </LinksContainer>
-
-      <AnimatePresence>
-        {settingsOpen ? (
-          <ModalBackdrop
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2, ease: "easeInOut" }}
-            onClick={() => {
-              if (!deletingAccount) {
-                setSettingsOpen(false);
-                setConfirmDeleteText("");
-              }
-            }}
-          >
-            <ModalCard
-              initial={{ opacity: 0, scale: 0.96, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.96, y: 10 }}
-              transition={{ duration: 0.2, ease: "easeInOut" }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <ModalTitle>Settings</ModalTitle>
-
-              <Section>
-                <SectionTitle>Session</SectionTitle>
-                <SectionText>End your current session on this device.</SectionText>
-                <ModalButtonRow>
-                  <ActionButton type="button" onClick={handleLogout}>Logout</ActionButton>
-                </ModalButtonRow>
-              </Section>
-
-              <Section>
-                <SectionTitle>Danger Zone</SectionTitle>
-                <SectionText>This action is irreversible. Type DELETE to confirm account deletion.</SectionText>
-                <ConfirmInput
-                  type="text"
-                  value={confirmDeleteText}
-                  onChange={(e) => setConfirmDeleteText(e.target.value)}
-                  placeholder='Type "DELETE"'
-                />
-                <ModalButtonRow>
-                  <DangerButton
-                    type="button"
-                    disabled={deletingAccount || confirmDeleteText.trim().toUpperCase() !== "DELETE"}
-                    onClick={handleDeleteAccount}
+      {typeof document !== "undefined"
+        ? createPortal(
+            <AnimatePresence>
+              {settingsOpen ? (
+                <ModalBackdrop
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.2, ease: "easeInOut" }}
+                  onClick={() => {
+                    if (!deletingAccount) {
+                      setSettingsOpen(false);
+                      setConfirmDeleteText("");
+                    }
+                  }}
+                >
+                  <ModalCard
+                    initial={{ opacity: 0, scale: 0.96, y: 10 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.96, y: 10 }}
+                    transition={{ duration: 0.2, ease: "easeInOut" }}
+                    onClick={(e) => e.stopPropagation()}
                   >
-                    {deletingAccount ? "Deleting..." : "Delete Account"}
-                  </DangerButton>
-                </ModalButtonRow>
-              </Section>
-            </ModalCard>
-          </ModalBackdrop>
-        ) : null}
-      </AnimatePresence>
+                    <ModalTitle>Settings</ModalTitle>
+
+                    <Section>
+                      <SectionTitle>Session</SectionTitle>
+                      <SectionText>End your current session on this device.</SectionText>
+                      <ModalButtonRow>
+                        <ActionButton type="button" onClick={handleLogout}>Logout</ActionButton>
+                      </ModalButtonRow>
+                    </Section>
+
+                    <Section>
+                      <SectionTitle>Danger Zone</SectionTitle>
+                      <SectionText>This action is irreversible. Type DELETE to confirm account deletion.</SectionText>
+                      <ConfirmInput
+                        type="text"
+                        value={confirmDeleteText}
+                        onChange={(e) => setConfirmDeleteText(e.target.value)}
+                        placeholder='Type "DELETE"'
+                      />
+                      <ModalButtonRow>
+                        <DangerButton
+                          type="button"
+                          disabled={deletingAccount || confirmDeleteText.trim().toUpperCase() !== "DELETE"}
+                          onClick={handleDeleteAccount}
+                        >
+                          {deletingAccount ? "Deleting..." : "Delete Account"}
+                        </DangerButton>
+                      </ModalButtonRow>
+                    </Section>
+                  </ModalCard>
+                </ModalBackdrop>
+              ) : null}
+            </AnimatePresence>,
+            document.body
+          )
+        : null}
 
     </NavContainer>
   );

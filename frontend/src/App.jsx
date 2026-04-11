@@ -42,6 +42,7 @@ function RolePortalGuard({ requiredRole, children }) {
   const allowed = Boolean(user && userRole === requiredRole);
 
   useEffect(() => {
+    if (!user) return;
     if (allowed) return;
 
     localStorage.removeItem("token");
@@ -49,7 +50,7 @@ function RolePortalGuard({ requiredRole, children }) {
     localStorage.removeItem("appRoleMode");
     setRoleMode("STUDENT");
     showSnackbar("Please login from the correct portal", "error");
-  }, [allowed, setRoleMode, showSnackbar]);
+  }, [allowed, setRoleMode, showSnackbar, user]);
 
   if (!allowed) {
     return <Navigate to="/" replace state={{ from: location.pathname }} />;
