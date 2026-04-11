@@ -84,16 +84,25 @@ public class AuthController {
 
         String email = body.get("email");
         String password = body.get("password");
+        String requestedRole = body.get("role");
+        User authenticatedUser;
 
         try {
             // Check user credentials first
-            userService.login(email, password);
+            authenticatedUser = userService.login(email, password);
         } catch (Exception ex) {
             String message = ex.getMessage();
             if (message == null || message.isBlank()) {
                 message = "Invalid email or password";
             }
             return ResponseEntity.status(400).body(Map.of("message", message));
+        }
+
+        if (requestedRole != null && !requestedRole.isBlank()) {
+            String normalized = requestedRole.trim().toUpperCase();
+            if (authenticatedUser.getRole() == null || !normalized.equalsIgnoreCase(authenticatedUser.getRole())) {
+                return ResponseEntity.status(403).body(Map.of("message", "Invalid role for this login portal"));
+            }
         }
 
         try {
@@ -127,7 +136,7 @@ public class AuthController {
         if (requestedRole != null && !requestedRole.isBlank()) {
             String normalized = requestedRole.trim().toUpperCase();
             if (user.getRole() == null || !normalized.equalsIgnoreCase(user.getRole())) {
-                return ResponseEntity.status(400).body(Map.of("message", "Role mismatch"));
+                return ResponseEntity.status(403).body(Map.of("message", "Invalid role for this login portal"));
             }
         }
         String token = jwtUtil.generateToken(user.getId());

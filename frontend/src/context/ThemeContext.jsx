@@ -46,14 +46,27 @@ const darkTheme = {
   shadowLg: "0 24px 56px rgba(0, 0, 0, 0.44)",
 };
 
-const withBackwardCompatibility = (tokens) => ({
+const withBackwardCompatibility = (tokens, roleAccent) => ({
   ...tokens,
+  roleAccent,
+  accent: roleAccent,
   // Legacy aliases used across existing screens/components.
   background: tokens.bgPrimary,
   text: tokens.textPrimary,
   cardText: tokens.textSecondary,
-  score: tokens.accent,
+  score: roleAccent,
 });
+
+const ROLE_ACCENTS = {
+  STUDENT: {
+    light: "#0b7dff",
+    dark: "#4ca1ff",
+  },
+  TEACHER: {
+    light: "#16a34a",
+    dark: "#22c55e",
+  },
+};
 
 // 🌍 Global CSS that reacts to theme
 const GlobalStyle = createGlobalStyle`
@@ -84,10 +97,20 @@ const GlobalStyle = createGlobalStyle`
   select,
   textarea {
     font: inherit;
+    transition: all 0.2s ease-in-out;
+  }
+
+  button:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible,
+  a:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.roleAccent};
+    outline-offset: 2px;
   }
 
   ::selection {
-    background: ${({ theme }) => theme.accent + "44"};
+    background: ${({ theme }) => theme.roleAccent + "44"};
     color: ${({ theme }) => theme.textPrimary};
   }
 `;
@@ -97,6 +120,7 @@ export const ThemeContext = createContext();
 
 export const ThemeContextProvider = ({ children }) => {
   const [mode, setMode] = useState("dark");
+  const [roleMode, setRoleModeState] = useState("STUDENT");
 
   // 🌙 Load saved theme or system preference
   useEffect(() => {
@@ -107,6 +131,21 @@ export const ThemeContextProvider = ({ children }) => {
       const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
       setMode(prefersDark ? "dark" : "light");
     }
+
+    const savedRoleMode = localStorage.getItem("appRoleMode");
+    if (savedRoleMode) {
+      setRoleModeState(savedRoleMode.toUpperCase() === "TEACHER" ? "TEACHER" : "STUDENT");
+      return;
+    }
+
+    try {
+      const rawUser = localStorage.getItem("user");
+      const user = rawUser ? JSON.parse(rawUser) : null;
+      const userRole = String(user?.role || user?.userRole || "STUDENT").toUpperCase();
+      setRoleModeState(userRole === "TEACHER" ? "TEACHER" : "STUDENT");
+    } catch {
+      setRoleModeState("STUDENT");
+    }
   }, []);
 
   // 💾 Persist theme to localStorage
@@ -114,11 +153,24 @@ export const ThemeContextProvider = ({ children }) => {
     localStorage.setItem("appTheme", mode);
   }, [mode]);
 
+  useEffect(() => {
+    localStorage.setItem("appRoleMode", roleMode);
+  }, [roleMode]);
+
   const toggleTheme = () => {
     setMode((prev) => (prev === "dark" ? "light" : "dark"));
   };
 
-  const themeObject = withBackwardCompatibility(mode === "dark" ? darkTheme : lightTheme);
+  const setRoleMode = (nextRole) => {
+    const normalized = String(nextRole || "STUDENT").toUpperCase();
+    setRoleModeState(normalized === "TEACHER" ? "TEACHER" : "STUDENT");
+  };
+
+  const baseTokens = mode === "dark" ? darkTheme : lightTheme;
+  const roleAccent = roleMode === "TEACHER"
+    ? ROLE_ACCENTS.TEACHER[mode]
+    : ROLE_ACCENTS.STUDENT[mode];
+  const themeObject = withBackwardCompatibility(baseTokens, roleAccent);
 
   return (
     <ThemeContext.Provider
@@ -126,9 +178,11 @@ export const ThemeContextProvider = ({ children }) => {
         // Keep legacy `theme` as mode string so existing consumers continue to work.
         theme: mode,
         mode,
+        roleMode,
         // Expose centralized token object for new consumers.
         themeObject,
         toggleTheme,
+        setRoleMode,
       }}
     >
       <ThemeProvider theme={themeObject}>

@@ -2,7 +2,7 @@ import React, { useContext, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/api.js";
 import styled from "styled-components";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { useSnackbar } from "../context/SnackbarContext.jsx";
 import { ThemeContext } from "../context/ThemeContext.jsx";
 import LoadingSpinner from "../components/LoadingSpinner.jsx";
@@ -71,6 +71,13 @@ const RegisterFormCard = styled.div`
   backdrop-filter: blur(8px);
   border: 1px solid ${({ theme }) => theme.borderColor};
   box-shadow: ${({ theme }) => theme.shadowLg};
+  transition: all 0.2s ease-in-out;
+
+  &:hover {
+    transform: translateY(-2px);
+    border-color: ${({ theme }) => theme.roleAccent};
+    box-shadow: 0 14px 34px ${({ theme }) => theme.roleAccent + "33"};
+  }
 
   @media (max-width: 540px) {
     padding: 22px;
@@ -196,24 +203,42 @@ const LoginMessage = styled.p`
 `;
 
 const RoleSwitch = styled.div`
+  position: relative;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
   margin-bottom: 16px;
+  padding: 4px;
+  border-radius: 12px;
+  border: 1px solid ${({ theme }) => theme.borderColor};
+  background: ${({ theme }) => theme.inputBg};
+`;
+
+const RoleThumb = styled(motion.span)`
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 4px;
+  width: calc(50% - 8px);
+  border-radius: 9px;
+  background: ${({ theme }) => theme.roleAccent};
+  box-shadow: 0 10px 22px ${({ theme }) => theme.roleAccent + "44"};
 `;
 
 const RoleButton = styled.button`
+  position: relative;
+  z-index: 1;
   padding: 8px 12px;
   border-radius: 10px;
-  border: 1px solid ${({ $active, theme }) => ($active ? theme.accent : theme.borderColor)};
+  border: 1px solid transparent;
   cursor: pointer;
-  background: ${({ $active, theme }) => ($active ? theme.accent : theme.accent + "14")};
+  background: transparent;
   color: ${({ $active, theme }) => ($active ? theme.onAccent : theme.textPrimary)};
   font-weight: 600;
-  transition: all 0.2s ease;
+  transition: all 0.2s ease-in-out;
 
   &:hover {
-    transform: translateY(-1px) scale(1.05);
+    transform: translateY(-1px) scale(1.03);
   }
 
   &:active {
@@ -221,16 +246,28 @@ const RoleButton = styled.button`
   }
 `;
 
+const AnimatedRolePanel = styled(motion.div)`
+  transition: all 0.2s ease-in-out;
+`;
+
 export default function Register() {
-  const { theme, toggleTheme } = useContext(ThemeContext);
+  const { theme, toggleTheme, setRoleMode } = useContext(ThemeContext);
   const [role, setRole] = useState("STUDENT");
   const [form, setForm] = useState({ username: "", email: "", password: "" });
   const [otp, setOtp] = useState("");
   const [step, setStep] = useState(1);
   const [sendingOtp, setSendingOtp] = useState(false);
   const [verifyingOtp, setVerifyingOtp] = useState(false);
+  const mode = role === "TEACHER" ? "teacher" : "student";
   const navigate = useNavigate();
   const { showSnackbar } = useSnackbar();
+
+  const handleRoleSwitch = (nextRole) => {
+    setRole(nextRole);
+    setRoleMode(nextRole);
+    setStep(1);
+    setOtp("");
+  };
 
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
@@ -277,6 +314,7 @@ export default function Register() {
       // ✅ Store login session automatically
       localStorage.setItem("token", res.data.token);
       localStorage.setItem("user", JSON.stringify(res.data.user));
+      setRoleMode(String(res?.data?.user?.role || role).toUpperCase());
 
       showSnackbar("OTP verified. Registration successful.", "info");
       navigate("/dashboard");
@@ -311,79 +349,93 @@ export default function Register() {
             <Header>Create Account</Header>
 
             <RoleSwitch>
-              <RoleButton type="button" $active={role === "STUDENT"} onClick={() => setRole("STUDENT")}>Student</RoleButton>
-              <RoleButton type="button" $active={role === "TEACHER"} onClick={() => setRole("TEACHER")}>Teacher</RoleButton>
+              <RoleThumb
+                animate={{ x: role === "TEACHER" ? "100%" : "0%", opacity: 1 }}
+                transition={{ duration: 0.3, ease: "easeInOut" }}
+              />
+              <RoleButton type="button" $active={role === "STUDENT"} onClick={() => handleRoleSwitch("STUDENT")}>Student</RoleButton>
+              <RoleButton type="button" $active={role === "TEACHER"} onClick={() => handleRoleSwitch("TEACHER")}>Teacher</RoleButton>
             </RoleSwitch>
 
-            {step === 1 && (
-              <Form onSubmit={sendOtp}>
-                <FieldWrapper>
-                  <StyledInput
-                    name="username"
-                    placeholder=" "
-                    onChange={handleChange}
-                    required
-                  />
-                  <StyledLabel>Username</StyledLabel>
-                </FieldWrapper>
+            <AnimatePresence mode="wait" initial={false}>
+              <AnimatedRolePanel
+                key={`${mode}-${step}`}
+                initial={{ opacity: 0, x: mode === "teacher" ? 16 : -16, scale: 0.98 }}
+                animate={{ opacity: 1, x: 0, scale: 1 }}
+                exit={{ opacity: 0, x: mode === "teacher" ? -16 : 16, scale: 0.98 }}
+                transition={{ duration: 0.3, ease: "easeInOut" }}
+              >
+                {step === 1 && (
+                  <Form onSubmit={sendOtp}>
+                    <FieldWrapper>
+                      <StyledInput
+                        name="username"
+                        placeholder=" "
+                        onChange={handleChange}
+                        required
+                      />
+                      <StyledLabel>Username</StyledLabel>
+                    </FieldWrapper>
 
-                <FieldWrapper>
-                  <StyledInput
-                    name="email"
-                    type="email"
-                    placeholder=" "
-                    onChange={handleChange}
-                    required
-                  />
-                  <StyledLabel>Email</StyledLabel>
-                </FieldWrapper>
+                    <FieldWrapper>
+                      <StyledInput
+                        name="email"
+                        type="email"
+                        placeholder=" "
+                        onChange={handleChange}
+                        required
+                      />
+                      <StyledLabel>Email</StyledLabel>
+                    </FieldWrapper>
 
-                <FieldWrapper>
-                  <StyledInput
-                    name="password"
-                    type="password"
-                    placeholder=" "
-                    onChange={handleChange}
-                    required
-                  />
-                  <StyledLabel>Password</StyledLabel>
-                </FieldWrapper>
+                    <FieldWrapper>
+                      <StyledInput
+                        name="password"
+                        type="password"
+                        placeholder=" "
+                        onChange={handleChange}
+                        required
+                      />
+                      <StyledLabel>Password</StyledLabel>
+                    </FieldWrapper>
 
-                <SubmitButton type="submit" disabled={sendingOtp}>
-                  {sendingOtp ? (
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
-                      <LoadingSpinner size={14} />
-                      Sending...
-                    </span>
-                  ) : "Send OTP"}
-                </SubmitButton>
+                    <SubmitButton type="submit" disabled={sendingOtp}>
+                      {sendingOtp ? (
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+                          <LoadingSpinner size={14} />
+                          Sending...
+                        </span>
+                      ) : "Send OTP"}
+                    </SubmitButton>
 
-                <GoogleAuthButton mode="register" disabled={sendingOtp || verifyingOtp} />
-              </Form>
-            )}
+                    <GoogleAuthButton mode="register" disabled={sendingOtp || verifyingOtp} />
+                  </Form>
+                )}
 
-            {step === 2 && (
-              <Form onSubmit={verifyOtp}>
-                <FieldWrapper>
-                  <StyledInput
-                    name="otp"
-                    placeholder=" "
-                    onChange={(e) => setOtp(e.target.value)}
-                    required
-                  />
-                  <StyledLabel>Enter OTP</StyledLabel>
-                </FieldWrapper>
+                {step === 2 && (
+                  <Form onSubmit={verifyOtp}>
+                    <FieldWrapper>
+                      <StyledInput
+                        name="otp"
+                        placeholder=" "
+                        onChange={(e) => setOtp(e.target.value)}
+                        required
+                      />
+                      <StyledLabel>Enter OTP</StyledLabel>
+                    </FieldWrapper>
 
-                <SubmitButton type="submit" disabled={verifyingOtp}>
-                  {verifyingOtp ? (
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
-                      <LoadingSpinner size={14} />
-                      Verifying...
-                    </span>
-                  ) : "Verify & Create Account"}
-                </SubmitButton>
-              </Form>
-            )}
+                    <SubmitButton type="submit" disabled={verifyingOtp}>
+                      {verifyingOtp ? (
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+                          <LoadingSpinner size={14} />
+                          Verifying...
+                        </span>
+                      ) : "Verify & Create Account"}
+                    </SubmitButton>
+                  </Form>
+                )}
+              </AnimatedRolePanel>
+            </AnimatePresence>
 
             <LoginMessage>
               Already have an account? <a href="/">Login</a>
