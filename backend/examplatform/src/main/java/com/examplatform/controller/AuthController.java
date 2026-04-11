@@ -147,6 +147,10 @@ public class AuthController {
         String requestedRole = body.get("role");
         User authenticatedUser;
 
+        if (userService.isGoogleOnlyAccount(email)) {
+            return ResponseEntity.status(403).body(Map.of("message", "Please login using Google"));
+        }
+
         try {
             // Check user credentials first
             authenticatedUser = userService.login(email, password);
@@ -155,7 +159,8 @@ public class AuthController {
             if (message == null || message.isBlank()) {
                 message = "Invalid email or password";
             }
-            return ResponseEntity.status(400).body(Map.of("message", message));
+            int status = "Please login using Google".equalsIgnoreCase(message) ? 403 : 400;
+            return ResponseEntity.status(status).body(Map.of("message", message));
         }
 
         if (requestedRole != null && !requestedRole.isBlank()) {
@@ -188,11 +193,18 @@ public class AuthController {
         String otp = body.get("otp");
         String requestedRole = body.get("role");
 
+        if (userService.isGoogleOnlyAccount(email)) {
+            return ResponseEntity.status(403).body(Map.of("message", "Please login using Google"));
+        }
+
         if (!otpService.verifyOtp(email, "LOGIN", otp)) {
             return ResponseEntity.status(400).body(Map.of("message", "Invalid or expired OTP"));
         }
 
-        User user = userService.findByEmail(email);
+        User user = userService.findOtpEligibleUserByEmail(email);
+        if (user == null) {
+            return ResponseEntity.status(400).body(Map.of("message", "Invalid email or password"));
+        }
         if (requestedRole != null && !requestedRole.isBlank()) {
             String normalized = requestedRole.trim().toUpperCase();
             if (user.getRole() == null || !normalized.equalsIgnoreCase(user.getRole())) {

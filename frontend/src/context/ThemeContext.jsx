@@ -97,7 +97,7 @@ const GlobalStyle = createGlobalStyle`
   select,
   textarea {
     font: inherit;
-    transition: all 0.2s ease-in-out;
+    transition: color 0.3s ease, background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease, transform 0.3s ease;
   }
 
   button:focus-visible,

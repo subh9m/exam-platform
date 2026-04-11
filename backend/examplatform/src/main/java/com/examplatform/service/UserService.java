@@ -20,7 +20,7 @@ public class UserService {
     public User register(User user) {
 
         user.setEmail(normalizeEmail(user.getEmail()));
-        user.setAuthProvider("EMAIL");
+        user.setAuthProvider("LOCAL");
 
         if (user.getRole() == null || user.getRole().isBlank()) {
             user.setRole("STUDENT");
@@ -51,38 +51,101 @@ public class UserService {
             throw new RuntimeException("Invalid email or password");
         }
 
-        boolean hasGoogleOnlyAccount = false;
+        boolean hasGoogleAccount = false;
+        boolean hasLocalAccount = false;
 
         for (User user : users) {
+            String provider = normalizeAuthProvider(user.getAuthProvider());
+            if ("GOOGLE".equals(provider)) {
+                hasGoogleAccount = true;
+            } else {
+                hasLocalAccount = true;
+            }
+        }
+
+        if (hasGoogleAccount && !hasLocalAccount) {
+            throw new RuntimeException("Please login using Google");
+        }
+
+        for (User user : users) {
+            String provider = normalizeAuthProvider(user.getAuthProvider());
+            if ("GOOGLE".equals(provider)) {
+                continue;
+            }
+
             String storedPassword = user.getPassword();
             if (storedPassword == null || storedPassword.isBlank()) {
-                if ("GOOGLE".equalsIgnoreCase(String.valueOf(user.getAuthProvider()))) {
-                    hasGoogleOnlyAccount = true;
-                }
                 continue;
             }
 
             // ✅ Match raw password with encoded password
             if (matchesEncoded(rawPassword, storedPassword)) {
+                if (!"LOCAL".equalsIgnoreCase(String.valueOf(user.getAuthProvider()))) {
+                    user.setAuthProvider("LOCAL");
+                    return userRepository.save(user);
+                }
                 return user;
             }
 
             // Backward-compatible fallback for old local records saved as plaintext passwords.
             if (rawPassword.equals(storedPassword)) {
                 user.setPassword(passwordEncoder.encode(rawPassword));
+                user.setAuthProvider("LOCAL");
                 return userRepository.save(user);
             }
-        }
-
-        if (hasGoogleOnlyAccount) {
-            throw new RuntimeException("This account uses Google sign-in. Please continue with Google.");
         }
 
         throw new RuntimeException("Invalid email or password");
     }
 
+    public boolean isGoogleOnlyAccount(String email) {
+        String normalizedEmail = normalizeEmail(email);
+        if (normalizedEmail.isBlank()) {
+            return false;
+        }
+
+        List<User> users = userRepository.findAllByEmailIgnoreCase(normalizedEmail);
+        if (users == null || users.isEmpty()) {
+            return false;
+        }
+
+        boolean hasGoogle = false;
+        boolean hasLocal = false;
+
+        for (User user : users) {
+            String provider = normalizeAuthProvider(user.getAuthProvider());
+            if ("GOOGLE".equals(provider)) {
+                hasGoogle = true;
+            } else {
+                hasLocal = true;
+            }
+        }
+
+        return hasGoogle && !hasLocal;
+    }
+
     public User findByEmail(String email) {
         return userRepository.findByEmailIgnoreCase(normalizeEmail(email));
+    }
+
+    public User findOtpEligibleUserByEmail(String email) {
+        String normalizedEmail = normalizeEmail(email);
+        if (normalizedEmail.isBlank()) {
+            return null;
+        }
+
+        List<User> users = userRepository.findAllByEmailIgnoreCase(normalizedEmail);
+        if (users == null || users.isEmpty()) {
+            return null;
+        }
+
+        for (User user : users) {
+            if (!"GOOGLE".equals(normalizeAuthProvider(user.getAuthProvider()))) {
+                return user;
+            }
+        }
+
+        return users.get(0);
     }
 
     public User findById(String id) {
@@ -125,10 +188,17 @@ public class UserService {
             } else if (!existingRole.equals(normalizedRequestedRole)) {
                 throw new RuntimeException("Invalid role for this login portal");
             }
-            if (!"GOOGLE".equalsIgnoreCase(linkedByGoogle.getAuthProvider())) {
+
+            String currentProviderRaw = linkedByGoogle.getAuthProvider();
+            String normalizedProvider = normalizeAuthProvider(currentProviderRaw);
+            if (currentProviderRaw == null || currentProviderRaw.isBlank()) {
                 linkedByGoogle.setAuthProvider("GOOGLE");
                 changed = true;
+            } else if (!normalizedProvider.equalsIgnoreCase(currentProviderRaw)) {
+                linkedByGoogle.setAuthProvider(normalizedProvider);
+                changed = true;
             }
+
             if (!linkedByGoogle.isVerified()) {
                 linkedByGoogle.setVerified(true);
                 changed = true;
@@ -151,10 +221,16 @@ public class UserService {
             if (existingByEmail.getRole() == null || existingByEmail.getRole().isBlank()) {
                 existingByEmail.setRole(normalizedRequestedRole);
             }
-            existingByEmail.setVerified(true);
-            if (existingByEmail.getAuthProvider() == null || existingByEmail.getAuthProvider().isBlank()) {
-                existingByEmail.setAuthProvider("GOOGLE");
+
+            String currentProviderRaw = existingByEmail.getAuthProvider();
+            String normalizedProvider = normalizeAuthProvider(currentProviderRaw);
+            if (currentProviderRaw == null || currentProviderRaw.isBlank()) {
+                existingByEmail.setAuthProvider("LOCAL");
+            } else if (!normalizedProvider.equalsIgnoreCase(currentProviderRaw)) {
+                existingByEmail.setAuthProvider(normalizedProvider);
             }
+
+            existingByEmail.setVerified(true);
             return userRepository.save(existingByEmail);
         }
 
@@ -186,6 +262,14 @@ public class UserService {
             return "";
         }
         return "TEACHER".equals(normalized) ? "TEACHER" : "STUDENT";
+    }
+
+    private String normalizeAuthProvider(String provider) {
+        String normalized = provider == null ? "" : provider.trim().toUpperCase();
+        if ("GOOGLE".equals(normalized)) {
+            return "GOOGLE";
+        }
+        return "LOCAL";
     }
 
     private boolean matchesEncoded(String rawPassword, String encodedPassword) {

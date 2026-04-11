@@ -23,7 +23,7 @@ public class User {
     private String role = "STUDENT";
     private int totalScore = 0;    // Score tracking
     private String googleId;       // Linked Google account subject
-    private String authProvider = "EMAIL";
+    private String authProvider = "LOCAL"; // LOCAL (OTP/password) or GOOGLE
 
     private boolean verified = false;  // ✅ email verified or not
 

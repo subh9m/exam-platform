@@ -37,7 +37,7 @@ const BrandTitle = styled.h2`
   margin: 0;
   font-size: clamp(19px, 3.2vw, 24px);
   font-weight: 800;
-  color: ${({ theme }) => theme.accent};
+  color: ${({ theme }) => theme.roleAccent};
 `;
 
 const BrandSub = styled.p`
@@ -71,7 +71,7 @@ const LoginFormCard = styled.div`
   border: 1px solid ${({ theme }) => theme.borderColor};
   box-shadow: ${({ theme }) => theme.shadowLg};
   backdrop-filter: blur(8px);
-  transition: all 0.2s ease-in-out;
+  transition: all 0.3s ease;
 
   &:hover {
     transform: translateY(-2px);
@@ -100,7 +100,7 @@ const TopRightThemeToggle = styled.button`
   padding: 8px 11px;
   border-radius: 10px;
   box-shadow: ${({ theme }) => theme.shadowSm};
-  transition: all 0.2s ease;
+  transition: all 0.3s ease;
 
   &:hover {
     transform: scale(1.02);
@@ -133,11 +133,11 @@ const StyledInput = styled.input`
   border: 1px solid ${({ theme }) => theme.inputBorder || theme.borderColor};
   font-size: 15px;
   outline: none;
-  transition: all 0.2s ease;
+  transition: all 0.3s ease;
 
   &:focus {
-    border-color: ${({ theme }) => theme.accent};
-    box-shadow: 0 0 0 3px ${({ theme }) => theme.accent + "33"};
+    border-color: ${({ theme }) => theme.roleAccent};
+    box-shadow: 0 0 0 3px ${({ theme }) => theme.roleAccent + "33"};
   }
 `;
 
@@ -147,27 +147,27 @@ const StyledLabel = styled.span`
   top: 12px;
   font-size: 15px;
   color: ${({ theme }) => theme.textSecondary};
-  transition: all 0.2s ease;
+  transition: all 0.3s ease;
   pointer-events: none;
 
   ${StyledInput}:focus + &,
   ${StyledInput}:not(:placeholder-shown) + & {
     transform: translateY(-24px) scale(0.85);
     opacity: 0.9;
-    color: ${({ theme }) => theme.accent};
+    color: ${({ theme }) => theme.roleAccent};
   }
 `;
 
 const SubmitButton = styled.button`
   padding: 12px 20px;
   border-radius: 12px;
-  background: ${({ theme }) => `linear-gradient(180deg, ${theme.accent}, ${theme.accent})`};
+  background: ${({ theme }) => `linear-gradient(180deg, ${theme.roleAccent}, ${theme.roleAccent})`};
   color: ${({ theme }) => theme.onAccent};
   font-weight: 600;
   font-size: 16px; /* Explicitly set font size */
   cursor: pointer;
   border: none;
-  transition: all 0.2s ease;
+  transition: all 0.3s ease;
 
   &:hover:not(:disabled) {
     transform: translateY(-2px) scale(1.05);
@@ -190,7 +190,7 @@ const RegisterMessage = styled.p`
   margin-top: 20px;
   color: ${({ theme }) => theme.cardText};
   a {
-    color: ${({ theme }) => theme.accent};
+    color: ${({ theme }) => theme.roleAccent};
     text-decoration: none;
     &:hover {
       color: ${({ theme }) => theme.text};
@@ -232,7 +232,7 @@ const RoleButton = styled.button`
   background: transparent;
   color: ${({ $active, theme }) => ($active ? theme.onAccent : theme.textPrimary)};
   font-weight: 600;
-  transition: all 0.2s ease-in-out;
+  transition: all 0.3s ease;
 
   &:hover {
     transform: translateY(-1px) scale(1.03);
@@ -244,7 +244,7 @@ const RoleButton = styled.button`
 `;
 
 const AnimatedRolePanel = styled(motion.div)`
-  transition: all 0.2s ease-in-out;
+  transition: all 0.3s ease;
 `;
 
 export default function Login() {
