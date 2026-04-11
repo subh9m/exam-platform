@@ -7,6 +7,9 @@ import org.springframework.stereotype.Service;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -60,13 +63,15 @@ public class EmailService {
     public void sendOtp(String to, String purpose, String otp) {
         String smtpUsername = sanitizeUsername(username);
         String smtpPassword = sanitizePassword(password);
+        String fromAddress = resolveFromAddress();
 
         if (smtpUsername.isBlank() || smtpPassword.isBlank()) {
             throw new IllegalStateException("SMTP credentials are missing. Verify EMAIL_USER/EMAIL_PASS on production.");
         }
 
-        String fromAddress = resolveFromAddress();
-    int configuredPort = port > 0 ? port : 587;
+        String smtpHost = sanitizeHost(host);
+        int configuredPort = port > 0 ? port : 587;
+        List<SmtpAttempt> attempts = buildAttempts(smtpHost, configuredPort);
 
         SimpleMailMessage msg = new SimpleMailMessage();
         msg.setFrom(fromAddress);
@@ -77,54 +82,47 @@ public class EmailService {
                         "It will expire in 5 minutes.\n" +
                         "If you did not request this, please ignore."
         );
-        JavaMailSenderImpl primarySender = buildSender(
-                smtpUsername,
-                smtpPassword,
-                configuredPort,
-                sslEnabled,
-                startTlsEnabled,
-                startTlsRequired
-        );
 
-        try {
-            primarySender.send(msg);
-            log.info("OTP email sent to={} purpose={} from={}", to, purpose, fromAddress);
-            return;
-        } catch (Exception ex) {
-            log.warn("Primary SMTP send failed for to={} purpose={} host={} port={} from={}; trying fallback if enabled", to, purpose, host, configuredPort, fromAddress, ex);
+        Exception lastFailure = null;
+        boolean timeoutSeen = false;
 
-            if (isAuthFailure(ex)) {
-                throw new IllegalStateException("SMTP authentication failed. Verify EMAIL_USER and EMAIL_PASS (use a valid app password).");
-            }
-
-            if (!smtpFallbackEnabled) {
-                log.error("Failed to send OTP email to={} purpose={} from={} and fallback is disabled", to, purpose, from, ex);
-                throw buildDeliveryFailure(ex, null, false);
-            }
-
-            Exception fallbackException = null;
+        for (SmtpAttempt attempt : attempts) {
             try {
-                boolean sentViaFallback = sendWithFallbackTransport(
-                        msg,
+                JavaMailSenderImpl sender = buildSender(
+                        attempt.host,
                         smtpUsername,
                         smtpPassword,
+                        attempt.port,
+                        attempt.useSsl,
+                        attempt.useStartTls,
+                        attempt.requireStartTls
+                );
+                sender.send(msg);
+                log.info("OTP email sent to={} purpose={} from={} via {}:{}", to, purpose, fromAddress, attempt.host, attempt.port);
+                return;
+            } catch (Exception ex) {
+                lastFailure = ex;
+                timeoutSeen = timeoutSeen || isTimeoutFailure(ex);
+                log.warn("SMTP send failed via {}:{} ssl={} starttls={} to={} purpose={}",
+                        attempt.host,
+                        attempt.port,
+                        attempt.useSsl,
+                        attempt.useStartTls,
                         to,
                         purpose,
-                        fromAddress,
-                        configuredPort,
-                        sslEnabled
-                );
-                if (sentViaFallback) {
-                    return;
-                }
-            } catch (Exception fallbackEx) {
-                fallbackException = fallbackEx;
-                log.error("Failed to send OTP email to={} purpose={} from={} via primary and fallback SMTP", to, purpose, from, fallbackEx);
-            }
+                        ex);
 
-            log.error("Failed to send OTP email to={} purpose={} from={} via primary and fallback SMTP", to, purpose, from);
-            throw buildDeliveryFailure(ex, fallbackException, true);
+                if (isAuthFailure(ex)) {
+                    throw new IllegalStateException("SMTP authentication failed. Verify EMAIL_USER and EMAIL_PASS (use a valid app password).");
+                }
+            }
         }
+
+        if (timeoutSeen) {
+            throw new IllegalStateException("SMTP connection timed out from server. Outbound SMTP to Gmail is timing out in production.");
+        }
+
+        throw buildDeliveryFailure(lastFailure);
     }
 
     private String resolveFromAddress() {
@@ -152,14 +150,15 @@ public class EmailService {
         return "no-reply@example.com";
     }
 
-    private JavaMailSenderImpl buildSender(String smtpUsername,
+    private JavaMailSenderImpl buildSender(String smtpHost,
+                                           String smtpUsername,
                                            String smtpPassword,
                                            int targetPort,
                                            boolean useSsl,
                                            boolean useStartTls,
                                            boolean requireStartTls) {
         JavaMailSenderImpl sender = new JavaMailSenderImpl();
-        sender.setHost(host);
+        sender.setHost(smtpHost);
         sender.setPort(targetPort);
         sender.setUsername(smtpUsername);
         sender.setPassword(smtpPassword);
@@ -170,7 +169,7 @@ public class EmailService {
         props.put("mail.smtp.starttls.enable", String.valueOf(useStartTls));
         props.put("mail.smtp.starttls.required", String.valueOf(requireStartTls));
         props.put("mail.smtp.ssl.enable", String.valueOf(useSsl));
-        props.put("mail.smtp.ssl.trust", (sslTrust == null || sslTrust.isBlank()) ? host : sslTrust);
+        props.put("mail.smtp.ssl.trust", (sslTrust == null || sslTrust.isBlank()) ? smtpHost : sslTrust);
         props.put("mail.smtp.connectiontimeout", String.valueOf(connectionTimeout));
         props.put("mail.smtp.timeout", String.valueOf(readTimeout));
         props.put("mail.smtp.writetimeout", String.valueOf(writeTimeout));
@@ -178,58 +177,60 @@ public class EmailService {
         return sender;
     }
 
-    private boolean sendWithFallbackTransport(SimpleMailMessage msg,
-                                              String smtpUsername,
-                                              String smtpPassword,
-                                              String to,
-                                              String purpose,
-                                              String fromAddress,
-                                              int configuredPort,
-                                              boolean configuredSslEnabled) {
-        int fallbackPort = configuredSslEnabled ? 587 : smtpFallbackPort;
-        boolean fallbackUseSsl = !configuredSslEnabled;
-        boolean fallbackStartTls = !fallbackUseSsl;
-        boolean fallbackRequireStartTls = fallbackStartTls;
+    private List<SmtpAttempt> buildAttempts(String smtpHost, int configuredPort) {
+        List<SmtpAttempt> attempts = new ArrayList<>();
+        LinkedHashSet<String> dedupe = new LinkedHashSet<>();
 
-        if (fallbackPort == configuredPort && fallbackUseSsl == configuredSslEnabled) {
-            return false;
+        addAttempt(attempts, dedupe, smtpHost, configuredPort, sslEnabled, startTlsEnabled, startTlsRequired);
+
+        if (smtpFallbackEnabled) {
+            int fallbackPort = smtpFallbackPort > 0 ? smtpFallbackPort : 465;
+            boolean fallbackSsl = fallbackPort == 465;
+            boolean fallbackTls = !fallbackSsl;
+            addAttempt(attempts, dedupe, smtpHost, fallbackPort, fallbackSsl, fallbackTls, fallbackTls);
+
+            if (configuredPort != 587) {
+                addAttempt(attempts, dedupe, smtpHost, 587, false, true, true);
+            }
+            if (configuredPort != 465) {
+                addAttempt(attempts, dedupe, smtpHost, 465, true, false, false);
+            }
         }
 
-        try {
-            JavaMailSenderImpl fallbackSender = buildSender(
-                    smtpUsername,
-                    smtpPassword,
-                    fallbackPort,
-                    fallbackUseSsl,
-                    fallbackStartTls,
-                    fallbackRequireStartTls
-            );
-            fallbackSender.send(msg);
-            log.info("OTP email sent via fallback SMTP to={} purpose={} host={} port={} from={}", to, purpose, host, fallbackPort, fromAddress);
-            return true;
-        } catch (Exception fallbackEx) {
-            log.warn("Fallback SMTP send failed for to={} purpose={} host={} port={}", to, purpose, host, fallbackPort, fallbackEx);
+        if (isGmailHost(smtpHost)) {
+            String alias = "smtp.gmail.com".equalsIgnoreCase(smtpHost) ? "smtp.googlemail.com" : "smtp.gmail.com";
+            addAttempt(attempts, dedupe, alias, configuredPort, sslEnabled, startTlsEnabled, startTlsRequired);
+            addAttempt(attempts, dedupe, alias, 587, false, true, true);
+            addAttempt(attempts, dedupe, alias, 465, true, false, false);
         }
 
-        return false;
+        return attempts;
     }
 
-    private IllegalStateException buildDeliveryFailure(Exception primary, Exception fallback, boolean fallbackAttempted) {
-        String primaryMessage = flattenMessage(primary).toLowerCase();
-        String fallbackMessage = flattenMessage(fallback).toLowerCase();
+    private void addAttempt(List<SmtpAttempt> attempts,
+                            LinkedHashSet<String> dedupe,
+                            String smtpHost,
+                            int smtpPort,
+                            boolean useSsl,
+                            boolean useStartTls,
+                            boolean requireStartTls) {
+        String key = smtpHost + "|" + smtpPort + "|" + useSsl + "|" + useStartTls + "|" + requireStartTls;
+        if (dedupe.add(key)) {
+            attempts.add(new SmtpAttempt(smtpHost, smtpPort, useSsl, useStartTls, requireStartTls));
+        }
+    }
 
-        if (isAuthFailure(primary) || isAuthFailure(fallback)) {
+    private boolean isGmailHost(String smtpHost) {
+        return "smtp.gmail.com".equalsIgnoreCase(smtpHost) || "smtp.googlemail.com".equalsIgnoreCase(smtpHost);
+    }
+
+    private IllegalStateException buildDeliveryFailure(Exception failure) {
+        if (isAuthFailure(failure)) {
             return new IllegalStateException("SMTP authentication failed. Verify EMAIL_USER and EMAIL_PASS (use a valid app password).");
         }
-
-        if (primaryMessage.contains("timed out") || fallbackMessage.contains("timed out")
-                || primaryMessage.contains("connect") || fallbackMessage.contains("connect")) {
-            if (fallbackAttempted) {
-                return new IllegalStateException("SMTP connection timed out from server. Check provider restrictions or use an API-based email provider.");
-            }
-            return new IllegalStateException("SMTP connection timed out from server.");
+        if (isTimeoutFailure(failure)) {
+            return new IllegalStateException("SMTP connection timed out from server. Outbound SMTP to Gmail is timing out in production.");
         }
-
         return new IllegalStateException("Unable to deliver OTP email right now. Please check email settings and try again.");
     }
 
@@ -239,6 +240,14 @@ public class EmailService {
                 || message.contains("authentication failed")
                 || message.contains("username and password not accepted")
                 || message.contains("auth") && message.contains("invalid credentials");
+    }
+
+    private boolean isTimeoutFailure(Exception ex) {
+        String message = flattenMessage(ex).toLowerCase();
+        return message.contains("timed out")
+                || message.contains("timeout")
+                || message.contains("connect")
+                || message.contains("connection reset");
     }
 
     private String flattenMessage(Exception ex) {
@@ -258,6 +267,11 @@ public class EmailService {
             current = current.getCause();
         }
         return sb.toString();
+    }
+
+    private String sanitizeHost(String value) {
+        String normalized = value == null ? "" : value.trim();
+        return normalized.isBlank() ? "smtp.gmail.com" : normalized;
     }
 
     private String sanitizeUsername(String value) {
@@ -285,10 +299,26 @@ public class EmailService {
         }
 
         // Gmail app passwords are often pasted with spaces between 4-char groups.
-        if ("smtp.gmail.com".equalsIgnoreCase(host)) {
+        if (isGmailHost(sanitizeHost(host))) {
             return trimmed.replaceAll("\\s+", "");
         }
 
         return trimmed;
+    }
+
+    private static final class SmtpAttempt {
+        private final String host;
+        private final int port;
+        private final boolean useSsl;
+        private final boolean useStartTls;
+        private final boolean requireStartTls;
+
+        private SmtpAttempt(String host, int port, boolean useSsl, boolean useStartTls, boolean requireStartTls) {
+            this.host = host;
+            this.port = port;
+            this.useSsl = useSsl;
+            this.useStartTls = useStartTls;
+            this.requireStartTls = requireStartTls;
+        }
     }
 }
