@@ -62,11 +62,12 @@ public class OtpService {
 
         otpRepo.save(otp);
 
-        boolean delivered = emailService.sendOtp(email, purpose, code);
-        if (!delivered) {
+        try {
+            emailService.sendOtp(email, purpose, code);
+        } catch (IllegalStateException ex) {
             otpRepo.delete(otp);
-            log.error("OTP generation aborted because email delivery failed for purpose={} to={}", purpose, email);
-            throw new IllegalStateException("Unable to deliver OTP email right now. Please check email settings and try again.");
+            log.error("OTP generation aborted because email delivery failed for purpose={} to={}: {}", purpose, email, ex.getMessage());
+            throw ex;
         }
 
         log.info("OTP generated and delivered for purpose={} to={}", purpose, email);

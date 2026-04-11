@@ -57,13 +57,12 @@ public class EmailService {
     @Value("${spring.mail.properties.mail.smtp.writetimeout:5000}")
     private int writeTimeout;
 
-    public boolean sendOtp(String to, String purpose, String otp) {
+    public void sendOtp(String to, String purpose, String otp) {
         String smtpUsername = sanitizeUsername(username);
         String smtpPassword = sanitizePassword(password);
 
         if (smtpUsername.isBlank() || smtpPassword.isBlank()) {
-            log.error("SMTP credentials are missing. EMAIL_USER/EMAIL_PASS must be configured.");
-            return false;
+            throw new IllegalStateException("SMTP credentials are missing. Verify EMAIL_USER/EMAIL_PASS on production.");
         }
 
         String fromAddress = resolveFromAddress();
@@ -90,15 +89,20 @@ public class EmailService {
         try {
             primarySender.send(msg);
             log.info("OTP email sent to={} purpose={} from={}", to, purpose, fromAddress);
-            return true;
+            return;
         } catch (Exception ex) {
             log.warn("Primary SMTP send failed for to={} purpose={} host={} port={} from={}; trying fallback if enabled", to, purpose, host, configuredPort, fromAddress, ex);
 
-            if (!smtpFallbackEnabled) {
-                log.error("Failed to send OTP email to={} purpose={} from={} and fallback is disabled", to, purpose, from, ex);
-                return false;
+            if (isAuthFailure(ex)) {
+                throw new IllegalStateException("SMTP authentication failed. Verify EMAIL_USER and EMAIL_PASS (use a valid app password).");
             }
 
+            if (!smtpFallbackEnabled) {
+                log.error("Failed to send OTP email to={} purpose={} from={} and fallback is disabled", to, purpose, from, ex);
+                throw buildDeliveryFailure(ex, null, false);
+            }
+
+            Exception fallbackException = null;
             try {
                 boolean sentViaFallback = sendWithFallbackTransport(
                         msg,
@@ -111,15 +115,15 @@ public class EmailService {
                         sslEnabled
                 );
                 if (sentViaFallback) {
-                    return true;
+                    return;
                 }
             } catch (Exception fallbackEx) {
+                fallbackException = fallbackEx;
                 log.error("Failed to send OTP email to={} purpose={} from={} via primary and fallback SMTP", to, purpose, from, fallbackEx);
-                return false;
             }
 
             log.error("Failed to send OTP email to={} purpose={} from={} via primary and fallback SMTP", to, purpose, from);
-            return false;
+            throw buildDeliveryFailure(ex, fallbackException, true);
         }
     }
 
@@ -208,6 +212,52 @@ public class EmailService {
         }
 
         return false;
+    }
+
+    private IllegalStateException buildDeliveryFailure(Exception primary, Exception fallback, boolean fallbackAttempted) {
+        String primaryMessage = flattenMessage(primary).toLowerCase();
+        String fallbackMessage = flattenMessage(fallback).toLowerCase();
+
+        if (isAuthFailure(primary) || isAuthFailure(fallback)) {
+            return new IllegalStateException("SMTP authentication failed. Verify EMAIL_USER and EMAIL_PASS (use a valid app password).");
+        }
+
+        if (primaryMessage.contains("timed out") || fallbackMessage.contains("timed out")
+                || primaryMessage.contains("connect") || fallbackMessage.contains("connect")) {
+            if (fallbackAttempted) {
+                return new IllegalStateException("SMTP connection timed out from server. Check provider restrictions or use an API-based email provider.");
+            }
+            return new IllegalStateException("SMTP connection timed out from server.");
+        }
+
+        return new IllegalStateException("Unable to deliver OTP email right now. Please check email settings and try again.");
+    }
+
+    private boolean isAuthFailure(Exception ex) {
+        String message = flattenMessage(ex).toLowerCase();
+        return message.contains("535")
+                || message.contains("authentication failed")
+                || message.contains("username and password not accepted")
+                || message.contains("auth") && message.contains("invalid credentials");
+    }
+
+    private String flattenMessage(Exception ex) {
+        if (ex == null) {
+            return "";
+        }
+
+        StringBuilder sb = new StringBuilder();
+        Throwable current = ex;
+        while (current != null) {
+            if (current.getMessage() != null && !current.getMessage().isBlank()) {
+                if (sb.length() > 0) {
+                    sb.append(" | ");
+                }
+                sb.append(current.getMessage());
+            }
+            current = current.getCause();
+        }
+        return sb.toString();
     }
 
     private String sanitizeUsername(String value) {
