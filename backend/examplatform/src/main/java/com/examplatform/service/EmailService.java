@@ -1,34 +1,26 @@
 package com.examplatform.service;
 
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
+import jakarta.mail.internet.MimeMessage;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.web.client.HttpStatusCodeException;
-import org.springframework.web.client.RestTemplate;
-
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.MimeMessageHelper;
 
 @Service
 public class EmailService {
     private static final Logger log = LoggerFactory.getLogger(EmailService.class);
-    private static final String RESEND_API_URL = "https://api.resend.com/emails";
-    private static final String RESEND_FROM = "Exam Platform <onboarding@resend.dev>";
 
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final JavaMailSender mailSender;
+    private final String fromAddress;
+
+    public EmailService(JavaMailSender mailSender, @Value("${spring.mail.from}") String fromAddress) {
+        this.mailSender = mailSender;
+        this.fromAddress = fromAddress;
+    }
 
     public void sendOtp(String to, String purpose, String otp) {
-        String apiKey = String.valueOf(System.getenv("RESEND_API_KEY") == null ? "" : System.getenv("RESEND_API_KEY")).trim();
-        if (apiKey.isBlank()) {
-            throw new IllegalStateException("RESEND_API_KEY is missing on production");
-        }
-
         String recipient = String.valueOf(to == null ? "" : to).trim();
         if (recipient.isBlank()) {
             throw new IllegalArgumentException("Recipient email is required");
@@ -40,42 +32,19 @@ public class EmailService {
                 + "<br/><br/>It will expire in 5 minutes."
                 + "<br/>If you did not request this, please ignore.";
 
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("from", RESEND_FROM);
-        body.put("to", List.of(recipient));
-        body.put("subject", "Your OTP Code");
-        body.put("html", html);
-
-        log.info("Sending OTP email via Resend to={} purpose={}", recipient, String.valueOf(purpose));
-        log.info("Resend payload: {}", body);
-
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-        headers.setBearerAuth(apiKey);
-
-        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
-
         try {
-            ResponseEntity<String> response = restTemplate.exchange(RESEND_API_URL, HttpMethod.POST, entity, String.class);
-            log.info("Resend status={} body={}", response.getStatusCode(), response.getBody());
-            System.out.println("Resend Status: " + response.getStatusCode());
-            System.out.println("Resend Body: " + response.getBody());
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            helper.setFrom(fromAddress);
+            helper.setTo(recipient);
+            helper.setSubject("Your OTP Code");
+            helper.setText(html, true);
 
-            if (response.getStatusCode().is2xxSuccessful()) {
-                log.info("OTP email sent via Resend to={} purpose={}", recipient, String.valueOf(purpose));
-                return;
-            }
-
-            log.error("Resend returned non-success status={} body={}", response.getStatusCode().value(), response.getBody());
-            throw new RuntimeException("Unable to deliver OTP email right now. Provider status="
-                    + response.getStatusCode().value() + ", body=" + response.getBody());
-        } catch (HttpStatusCodeException ex) {
-            log.error("Resend API error status={} body={}", ex.getStatusCode().value(), ex.getResponseBodyAsString());
-            System.out.println("Resend Status: " + ex.getStatusCode());
-            System.out.println("Resend Body: " + ex.getResponseBodyAsString());
-            throw new RuntimeException("Unable to deliver OTP email right now. Provider error=" + ex.getResponseBodyAsString());
+            log.info("Sending OTP email via Gmail SMTP to={} purpose={}", recipient, String.valueOf(purpose));
+            mailSender.send(message);
+            log.info("OTP email sent via Gmail SMTP to={} purpose={}", recipient, String.valueOf(purpose));
         } catch (Exception ex) {
-            log.error("Resend API call failed", ex);
+            log.error("Gmail SMTP send failed for recipient={} purpose={}", recipient, String.valueOf(purpose), ex);
             throw new RuntimeException("Unable to deliver OTP email right now. Email provider error.");
         }
     }
