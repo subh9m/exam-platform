@@ -2,7 +2,6 @@ package com.examplatform.service;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.SimpleMailMessage;
-import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.JavaMailSenderImpl;
 import org.springframework.stereotype.Service;
 import org.slf4j.Logger;
@@ -16,8 +15,6 @@ import java.util.regex.Pattern;
 public class EmailService {
     private static final Logger log = LoggerFactory.getLogger(EmailService.class);
 
-    private final JavaMailSender mailSender;
-
     @Value("${spring.mail.from:Exam Platform <no-reply@example.com>}")
     private String from;
 
@@ -29,6 +26,21 @@ public class EmailService {
 
     @Value("${spring.mail.password:}")
     private String password;
+
+    @Value("${spring.mail.port:587}")
+    private int port;
+
+    @Value("${spring.mail.properties.mail.smtp.starttls.enable:true}")
+    private boolean startTlsEnabled;
+
+    @Value("${spring.mail.properties.mail.smtp.starttls.required:true}")
+    private boolean startTlsRequired;
+
+    @Value("${spring.mail.properties.mail.smtp.ssl.enable:false}")
+    private boolean sslEnabled;
+
+    @Value("${spring.mail.properties.mail.smtp.ssl.trust:}")
+    private String sslTrust;
 
     @Value("${app.mail.smtp-fallback-enabled:true}")
     private boolean smtpFallbackEnabled;
@@ -45,10 +57,6 @@ public class EmailService {
     @Value("${spring.mail.properties.mail.smtp.writetimeout:5000}")
     private int writeTimeout;
 
-    public EmailService(JavaMailSender mailSender) {
-        this.mailSender = mailSender;
-    }
-
     public boolean sendOtp(String to, String purpose, String otp) {
         String smtpUsername = sanitizeUsername(username);
         String smtpPassword = sanitizePassword(password);
@@ -59,6 +67,7 @@ public class EmailService {
         }
 
         String fromAddress = resolveFromAddress();
+    int configuredPort = port > 0 ? port : 587;
 
         SimpleMailMessage msg = new SimpleMailMessage();
         msg.setFrom(fromAddress);
@@ -69,12 +78,21 @@ public class EmailService {
                         "It will expire in 5 minutes.\n" +
                         "If you did not request this, please ignore."
         );
+        JavaMailSenderImpl primarySender = buildSender(
+                smtpUsername,
+                smtpPassword,
+                configuredPort,
+                sslEnabled,
+                startTlsEnabled,
+                startTlsRequired
+        );
+
         try {
-            mailSender.send(msg);
+            primarySender.send(msg);
             log.info("OTP email sent to={} purpose={} from={}", to, purpose, fromAddress);
             return true;
         } catch (Exception ex) {
-            log.warn("Primary SMTP send failed for to={} purpose={} host={} port=587 from={}; trying fallback if enabled", to, purpose, host, fromAddress, ex);
+            log.warn("Primary SMTP send failed for to={} purpose={} host={} port={} from={}; trying fallback if enabled", to, purpose, host, configuredPort, fromAddress, ex);
 
             if (!smtpFallbackEnabled) {
                 log.error("Failed to send OTP email to={} purpose={} from={} and fallback is disabled", to, purpose, from, ex);
@@ -82,7 +100,16 @@ public class EmailService {
             }
 
             try {
-                boolean sentViaFallback = sendWithFallbackTransports(msg, smtpUsername, smtpPassword, to, purpose, fromAddress);
+                boolean sentViaFallback = sendWithFallbackTransport(
+                        msg,
+                        smtpUsername,
+                        smtpPassword,
+                        to,
+                        purpose,
+                        fromAddress,
+                        configuredPort,
+                        sslEnabled
+                );
                 if (sentViaFallback) {
                     return true;
                 }
@@ -98,7 +125,7 @@ public class EmailService {
 
     private String resolveFromAddress() {
         String configured = from == null ? "" : from.trim();
-        String user = username == null ? "" : username.trim();
+        String user = sanitizeUsername(username);
 
         if (!configured.isBlank()) {
             Matcher m = Pattern.compile("<([^>]+)>").matcher(configured);
@@ -121,20 +148,25 @@ public class EmailService {
         return "no-reply@example.com";
     }
 
-    private JavaMailSenderImpl buildFallbackSender(String smtpUsername, String smtpPassword, int port, boolean sslEnabled) {
+    private JavaMailSenderImpl buildSender(String smtpUsername,
+                                           String smtpPassword,
+                                           int targetPort,
+                                           boolean useSsl,
+                                           boolean useStartTls,
+                                           boolean requireStartTls) {
         JavaMailSenderImpl sender = new JavaMailSenderImpl();
         sender.setHost(host);
-        sender.setPort(port);
+        sender.setPort(targetPort);
         sender.setUsername(smtpUsername);
         sender.setPassword(smtpPassword);
 
         Properties props = sender.getJavaMailProperties();
         props.put("mail.transport.protocol", "smtp");
         props.put("mail.smtp.auth", "true");
-        props.put("mail.smtp.starttls.enable", String.valueOf(!sslEnabled));
-        props.put("mail.smtp.starttls.required", String.valueOf(!sslEnabled));
-        props.put("mail.smtp.ssl.enable", String.valueOf(sslEnabled));
-        props.put("mail.smtp.ssl.trust", host);
+        props.put("mail.smtp.starttls.enable", String.valueOf(useStartTls));
+        props.put("mail.smtp.starttls.required", String.valueOf(requireStartTls));
+        props.put("mail.smtp.ssl.enable", String.valueOf(useSsl));
+        props.put("mail.smtp.ssl.trust", (sslTrust == null || sslTrust.isBlank()) ? host : sslTrust);
         props.put("mail.smtp.connectiontimeout", String.valueOf(connectionTimeout));
         props.put("mail.smtp.timeout", String.valueOf(readTimeout));
         props.put("mail.smtp.writetimeout", String.valueOf(writeTimeout));
@@ -142,32 +174,37 @@ public class EmailService {
         return sender;
     }
 
-    private boolean sendWithFallbackTransports(SimpleMailMessage msg,
-                                               String smtpUsername,
-                                               String smtpPassword,
-                                               String to,
-                                               String purpose,
-                                               String fromAddress) {
-        try {
-            JavaMailSenderImpl sslFallbackSender = buildFallbackSender(smtpUsername, smtpPassword, smtpFallbackPort, true);
-            sslFallbackSender.send(msg);
-            log.info("OTP email sent via fallback SMTP to={} purpose={} host={} port={} from={}", to, purpose, host, smtpFallbackPort, fromAddress);
-            return true;
-        } catch (Exception sslEx) {
-            log.warn("SSL fallback SMTP send failed for to={} purpose={} host={} port={}", to, purpose, host, smtpFallbackPort, sslEx);
-        }
+    private boolean sendWithFallbackTransport(SimpleMailMessage msg,
+                                              String smtpUsername,
+                                              String smtpPassword,
+                                              String to,
+                                              String purpose,
+                                              String fromAddress,
+                                              int configuredPort,
+                                              boolean configuredSslEnabled) {
+        int fallbackPort = configuredSslEnabled ? 587 : smtpFallbackPort;
+        boolean fallbackUseSsl = !configuredSslEnabled;
+        boolean fallbackStartTls = !fallbackUseSsl;
+        boolean fallbackRequireStartTls = fallbackStartTls;
 
-        if (smtpFallbackPort == 587) {
+        if (fallbackPort == configuredPort && fallbackUseSsl == configuredSslEnabled) {
             return false;
         }
 
         try {
-            JavaMailSenderImpl startTlsFallbackSender = buildFallbackSender(smtpUsername, smtpPassword, 587, false);
-            startTlsFallbackSender.send(msg);
-            log.info("OTP email sent via STARTTLS fallback to={} purpose={} host={} port=587 from={}", to, purpose, host, fromAddress);
+            JavaMailSenderImpl fallbackSender = buildSender(
+                    smtpUsername,
+                    smtpPassword,
+                    fallbackPort,
+                    fallbackUseSsl,
+                    fallbackStartTls,
+                    fallbackRequireStartTls
+            );
+            fallbackSender.send(msg);
+            log.info("OTP email sent via fallback SMTP to={} purpose={} host={} port={} from={}", to, purpose, host, fallbackPort, fromAddress);
             return true;
-        } catch (Exception tlsEx) {
-            log.warn("STARTTLS fallback SMTP send failed for to={} purpose={} host={} port=587", to, purpose, host, tlsEx);
+        } catch (Exception fallbackEx) {
+            log.warn("Fallback SMTP send failed for to={} purpose={} host={} port={}", to, purpose, host, fallbackPort, fallbackEx);
         }
 
         return false;
@@ -198,6 +235,10 @@ public class EmailService {
         }
 
         // Gmail app passwords are often pasted with spaces between 4-char groups.
-        return trimmed.replaceAll("\\s+", "");
+        if ("smtp.gmail.com".equalsIgnoreCase(host)) {
+            return trimmed.replaceAll("\\s+", "");
+        }
+
+        return trimmed;
     }
 }
