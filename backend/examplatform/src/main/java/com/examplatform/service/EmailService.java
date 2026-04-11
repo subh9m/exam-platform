@@ -9,6 +9,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Properties;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Service
 public class EmailService {
@@ -53,8 +55,10 @@ public class EmailService {
             return false;
         }
 
+        String fromAddress = resolveFromAddress();
+
         SimpleMailMessage msg = new SimpleMailMessage();
-        msg.setFrom(from);
+        msg.setFrom(fromAddress);
         msg.setTo(to);
         msg.setSubject("[Exam Platform] Your " + purpose + " OTP");
         msg.setText(
@@ -64,10 +68,10 @@ public class EmailService {
         );
         try {
             mailSender.send(msg);
-            log.info("OTP email sent to={} purpose={}", to, purpose);
+            log.info("OTP email sent to={} purpose={} from={}", to, purpose, fromAddress);
             return true;
         } catch (Exception ex) {
-            log.warn("Primary SMTP send failed for to={} purpose={} host={} port=587; trying fallback if enabled", to, purpose, host, ex);
+            log.warn("Primary SMTP send failed for to={} purpose={} host={} port=587 from={}; trying fallback if enabled", to, purpose, host, fromAddress, ex);
 
             if (!smtpFallbackEnabled) {
                 log.error("Failed to send OTP email to={} purpose={} from={} and fallback is disabled", to, purpose, from, ex);
@@ -77,13 +81,38 @@ public class EmailService {
             try {
                 JavaMailSenderImpl fallbackSender = buildFallbackSender();
                 fallbackSender.send(msg);
-                log.info("OTP email sent via fallback SMTP to={} purpose={} host={} port={}", to, purpose, host, smtpFallbackPort);
+                log.info("OTP email sent via fallback SMTP to={} purpose={} host={} port={} from={}", to, purpose, host, smtpFallbackPort, fromAddress);
                 return true;
             } catch (Exception fallbackEx) {
                 log.error("Failed to send OTP email to={} purpose={} from={} via primary and fallback SMTP", to, purpose, from, fallbackEx);
                 return false;
             }
         }
+    }
+
+    private String resolveFromAddress() {
+        String configured = from == null ? "" : from.trim();
+        String user = username == null ? "" : username.trim();
+
+        if (!configured.isBlank()) {
+            Matcher m = Pattern.compile("<([^>]+)>").matcher(configured);
+            if (m.find()) {
+                String extracted = m.group(1).trim();
+                if (!extracted.isBlank()) {
+                    return extracted;
+                }
+            }
+
+            if (!configured.contains(" ")) {
+                return configured;
+            }
+        }
+
+        if (!user.isBlank()) {
+            return user;
+        }
+
+        return "no-reply@example.com";
     }
 
     private JavaMailSenderImpl buildFallbackSender() {
