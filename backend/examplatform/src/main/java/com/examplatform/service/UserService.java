@@ -280,6 +280,13 @@ public class UserService {
             return "LOCAL";
         }
 
+        boolean hasPassword = user.getPassword() != null && !user.getPassword().isBlank();
+        if (hasPassword) {
+            // Backward-compatible safety: local accounts that were accidentally tagged as GOOGLE
+            // should continue to use OTP/password auth.
+            return "LOCAL";
+        }
+
         String explicit = normalizeAuthProvider(user.getAuthProvider());
         String raw = user.getAuthProvider() == null ? "" : user.getAuthProvider().trim();
         if (!raw.isBlank()) {
@@ -287,7 +294,6 @@ public class UserService {
         }
 
         boolean hasGoogleLink = user.getGoogleId() != null && !user.getGoogleId().isBlank();
-        boolean hasPassword = user.getPassword() != null && !user.getPassword().isBlank();
 
         if (hasGoogleLink && !hasPassword) {
             return "GOOGLE";
