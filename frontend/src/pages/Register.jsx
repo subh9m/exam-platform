@@ -1,4 +1,4 @@
-import React, { useContext, useState } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/api.js";
 import styled from "styled-components";
@@ -251,43 +251,51 @@ const AnimatedRolePanel = styled(motion.div)`
 `;
 
 export default function Register() {
-  const { theme, toggleTheme } = useContext(ThemeContext);
+  const { theme, toggleTheme, setRoleMode } = useContext(ThemeContext);
   const [role, setRole] = useState("STUDENT");
   const [form, setForm] = useState({ username: "", email: "", password: "" });
-  const [sendingLink, setSendingLink] = useState(false);
-  const [linkSent, setLinkSent] = useState(false);
+  const [registering, setRegistering] = useState(false);
   const mode = role === "TEACHER" ? "teacher" : "student";
   const navigate = useNavigate();
   const { showSnackbar } = useSnackbar();
 
+  useEffect(() => {
+    setRoleMode(role);
+  }, [role, setRoleMode]);
+
   const handleRoleSwitch = (nextRole) => {
     setRole(nextRole);
-    setLinkSent(false);
   };
 
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
-  const sendMagicLink = async (e) => {
+  const registerWithPassword = async (e) => {
     e.preventDefault();
-    if (sendingLink) return;
+    if (registering) return;
     const email = form.email.trim();
 
     try {
-      setSendingLink(true);
+      setRegistering(true);
       const payload = {
         username: form.username,
         email,
         password: form.password,
         role,
       };
-      await api.post("/auth/send-link/register", payload);
-      setLinkSent(true);
-      showSnackbar("Check your email for a verification link.", "success");
+      const res = await api.post("/auth/register", payload);
+
+      const responseRole = String(res?.data?.user?.role || role).toUpperCase();
+      localStorage.setItem("token", res.data.token);
+      localStorage.setItem("user", JSON.stringify(res.data.user));
+      setRoleMode(responseRole || role);
+
+      showSnackbar("Registration successful.", "success");
+      navigate((responseRole || role) === "TEACHER" ? "/teacher/dashboard" : "/dashboard");
     } catch (err) {
-      const msg = err?.response?.data?.message || "Unable to send registration link. Please check your details and try again.";
+      const msg = err?.response?.data?.message || "Registration failed. Please check your details and try again.";
       showSnackbar(msg, "error");
     } finally {
-      setSendingLink(false);
+      setRegistering(false);
     }
   };
 
@@ -324,13 +332,13 @@ export default function Register() {
 
             <AnimatePresence mode="wait" initial={false}>
               <AnimatedRolePanel
-                key={`${mode}-${linkSent ? "sent" : "idle"}`}
+                key={`${mode}-direct-register`}
                 initial={{ opacity: 0, x: mode === "teacher" ? 16 : -16, scale: 0.98 }}
                 animate={{ opacity: 1, x: 0, scale: 1 }}
                 exit={{ opacity: 0, x: mode === "teacher" ? -16 : 16, scale: 0.98 }}
                 transition={{ duration: 0.3, ease: "easeInOut" }}
               >
-                <Form onSubmit={sendMagicLink}>
+                <Form onSubmit={registerWithPassword}>
                   <FieldWrapper>
                     <StyledInput
                       name="username"
@@ -363,22 +371,16 @@ export default function Register() {
                     <StyledLabel>Password</StyledLabel>
                   </FieldWrapper>
 
-                  <SubmitButton type="submit" disabled={sendingLink}>
-                    {sendingLink ? (
+                  <SubmitButton type="submit" disabled={registering}>
+                    {registering ? (
                       <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
                         <LoadingSpinner size={14} />
-                        Sending...
+                        Creating account...
                       </span>
-                    ) : linkSent ? "Resend Magic Link" : "Send Magic Link"}
+                    ) : "Create Account"}
                   </SubmitButton>
 
-                  {linkSent && (
-                    <p style={{ color: "#1d8f52", fontSize: "14px", textAlign: "center" }}>
-                      Check your email for a registration verification link.
-                    </p>
-                  )}
-
-                  <GoogleAuthButton mode="register" selectedRole={role} disabled={sendingLink} />
+                  <GoogleAuthButton mode="register" selectedRole={role} disabled={registering} />
                 </Form>
               </AnimatedRolePanel>
             </AnimatePresence>

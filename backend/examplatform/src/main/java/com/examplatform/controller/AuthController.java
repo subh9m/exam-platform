@@ -3,7 +3,6 @@ package com.examplatform.controller;
 import com.examplatform.dto.auth.AuthUserDto;
 import com.examplatform.model.User;
 import com.examplatform.security.JwtUtil;
-import com.examplatform.service.MagicLinkService;
 import com.examplatform.service.UserService;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
@@ -21,12 +20,10 @@ public class AuthController {
     private static final String OAUTH_ROLE_COOKIE = "oauth_portal_role";
 
     private final UserService userService;
-    private final MagicLinkService magicLinkService;
     private final JwtUtil jwtUtil;
 
-    public AuthController(UserService userService, MagicLinkService magicLinkService, JwtUtil jwtUtil) {
+    public AuthController(UserService userService, JwtUtil jwtUtil) {
         this.userService = userService;
-        this.magicLinkService = magicLinkService;
         this.jwtUtil = jwtUtil;
     }
 
@@ -85,79 +82,77 @@ public class AuthController {
     }
 
     // ---------------------------------------------------
-    // 1) REGISTER STEP 1: SEND MAGIC LINK
+    // 1) REGISTER (PASSWORD-ONLY, NO SECOND FACTOR)
     // ---------------------------------------------------
-    @PostMapping("/send-link/register")
-    public ResponseEntity<?> sendRegisterLink(@RequestBody Map<String, String> body) {
+    @PostMapping("/register")
+    public ResponseEntity<?> register(@RequestBody Map<String, String> body) {
         String email = body.get("email");
         String username = body.get("username");
         String password = body.get("password");
         String role = body.getOrDefault("role", "STUDENT");
 
         try {
-            magicLinkService.sendRegisterLink(email, username, password, role);
-            return ResponseEntity.ok(Map.of("message", "Verification link sent to your email"));
-        } catch (IllegalArgumentException ex) {
-            return ResponseEntity.status(400).body(Map.of("message", ex.getMessage()));
-        } catch (IllegalStateException ex) {
-            int status = resolveStatus(ex.getMessage());
-            return ResponseEntity.status(status).body(Map.of("message", ex.getMessage()));
+            if (email == null || email.isBlank()) {
+                return ResponseEntity.status(400).body(Map.of("message", "Email is required"));
+            }
+            if (username == null || username.isBlank()) {
+                return ResponseEntity.status(400).body(Map.of("message", "Username is required"));
+            }
+            if (password == null || password.isBlank()) {
+                return ResponseEntity.status(400).body(Map.of("message", "Password is required"));
+            }
+
+            if (userService.findByEmail(email) != null) {
+                return ResponseEntity.status(400).body(Map.of("message", "Email already registered"));
+            }
+
+            User user = new User();
+            user.setUsername(username);
+            user.setEmail(email);
+            user.setPassword(password);
+            user.setRole(role == null || role.isBlank() ? "STUDENT" : role.trim().toUpperCase());
+
+            User saved = userService.register(user);
+            String token = jwtUtil.generateToken(saved.getId());
+
+            return ResponseEntity.ok(Map.of("user", AuthUserDto.from(saved), "token", token));
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(400).body(Map.of("message", ex.getMessage() == null ? "Registration failed" : ex.getMessage()));
         }
     }
 
     // ---------------------------------------------------
-    // 2) LOGIN STEP 1: SEND MAGIC LINK
+    // 2) LOGIN (PASSWORD-ONLY, NO SECOND FACTOR)
     // ---------------------------------------------------
-    @PostMapping("/send-link/login")
-    public ResponseEntity<?> sendLoginLink(@RequestBody Map<String, String> body) {
+    @PostMapping("/login")
+    public ResponseEntity<?> login(@RequestBody Map<String, String> body) {
         String email = body.get("email");
         String password = body.get("password");
         String requestedRole = body.get("role");
 
+        if (userService.isGoogleOnlyAccount(email)) {
+            return ResponseEntity.status(403).body(Map.of("message", "Please login using Google"));
+        }
+
         try {
-            magicLinkService.sendLoginLink(email, password, requestedRole);
-            return ResponseEntity.ok(Map.of("message", "Verification link sent to your email"));
-        } catch (IllegalArgumentException ex) {
-            return ResponseEntity.status(400).body(Map.of("message", ex.getMessage()));
-        } catch (IllegalStateException ex) {
-            int status = resolveStatus(ex.getMessage());
-            return ResponseEntity.status(status).body(Map.of("message", ex.getMessage()));
-        } catch (Exception ex) {
+            User authenticatedUser = userService.login(email, password);
+
+            if (requestedRole != null && !requestedRole.isBlank()) {
+                String normalized = requestedRole.trim().toUpperCase();
+                if (authenticatedUser.getRole() == null || !normalized.equalsIgnoreCase(authenticatedUser.getRole())) {
+                    return ResponseEntity.status(403).body(Map.of("message", "Invalid role for this login portal"));
+                }
+            }
+
+            String token = jwtUtil.generateToken(authenticatedUser.getId());
+            return ResponseEntity.ok(Map.of("user", AuthUserDto.from(authenticatedUser), "token", token));
+        } catch (RuntimeException ex) {
             String message = ex.getMessage();
             if (message == null || message.isBlank()) {
                 message = "Invalid email or password";
             }
-            return ResponseEntity.status(400).body(Map.of("message", message));
+            int status = "Please login using Google".equalsIgnoreCase(message) ? 403 : 400;
+            return ResponseEntity.status(status).body(Map.of("message", message));
         }
-    }
-
-    // ---------------------------------------------------
-    // 3) VERIFY MAGIC LINK AND RETURN AUTH SESSION
-    // ---------------------------------------------------
-    @GetMapping("/verify")
-    public ResponseEntity<?> verifyMagicLink(@RequestParam("token") String token) {
-        try {
-            MagicLinkService.MagicLinkAuthResult result = magicLinkService.verifyLink(token);
-            return ResponseEntity.ok(Map.of(
-                    "user", AuthUserDto.from(result.user()),
-                    "token", result.authToken()
-            ));
-        } catch (IllegalArgumentException ex) {
-            return ResponseEntity.status(400).body(Map.of("message", ex.getMessage()));
-        } catch (IllegalStateException ex) {
-            int status = resolveStatus(ex.getMessage());
-            return ResponseEntity.status(status).body(Map.of("message", ex.getMessage()));
-        }
-    }
-
-    private int resolveStatus(String message) {
-        String normalized = message == null ? "" : message.toLowerCase();
-        if (normalized.contains("google") || normalized.contains("invalid role")) {
-            return 403;
-        }
-        if (normalized.contains("invalid") || normalized.contains("expired") || normalized.contains("already")) {
-            return 400;
-        }
-        return 503;
     }
 }

@@ -42,19 +42,6 @@ public class SecurityConfig {
 
     @Bean
     @Order(1)
-    public SecurityFilterChain magicLinkEndpointsFilterChain(HttpSecurity http) throws Exception {
-        http
-            .securityMatcher("/api/auth/send-link/**", "/api/auth/verify")
-            .cors(cors -> {})
-            .csrf(csrf -> csrf.disable())
-            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
-
-        return http.build();
-    }
-
-    @Bean
-    @Order(2)
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
             .cors(cors -> {}) // enable CORS properly
@@ -64,15 +51,9 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll() // allow preflight
                 .requestMatchers("/health", "/actuator/health").permitAll()
                 .requestMatchers(HttpMethod.POST,
-                    "/api/auth/send-link/register",
-                    "/api/auth/send-link/login",
-                        "/api/auth/send-otp/register",
-                        "/api/auth/send-otp/login",
-                        "/api/auth/verify-otp/register",
-                        "/api/auth/verify-otp/login").permitAll()
-                .requestMatchers(HttpMethod.GET, "/api/auth/verify").permitAll()
-                .requestMatchers("/api/auth/send-link/**", "/api/auth/verify").permitAll()
-                .requestMatchers("/api/auth/send-otp/**", "/api/auth/verify-otp/**").permitAll()
+                        "/api/auth/register",
+                        "/api/auth/login",
+                        "/api/auth/oauth-login").permitAll()
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/oauth2/**", "/login/oauth2/**").permitAll()
                 .anyRequest().authenticated()

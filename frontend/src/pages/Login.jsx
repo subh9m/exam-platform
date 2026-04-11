@@ -1,4 +1,4 @@
-import React, { useContext, useState } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/api.js";
 import styled from "styled-components";
@@ -250,37 +250,49 @@ const AnimatedRolePanel = styled(motion.div)`
 export default function Login() {
   const navigate = useNavigate();
   const { showSnackbar } = useSnackbar();
-  const { theme, toggleTheme } = useContext(ThemeContext);
+  const { theme, toggleTheme, setRoleMode } = useContext(ThemeContext);
   const [role, setRole] = useState("STUDENT");
   const [form, setForm] = useState({ email: "", password: "" });
-  const [sendingLink, setSendingLink] = useState(false);
-  const [linkSent, setLinkSent] = useState(false);
+  const [loggingIn, setLoggingIn] = useState(false);
   const mode = role === "TEACHER" ? "teacher" : "student";
+
+  useEffect(() => {
+    setRoleMode(role);
+  }, [role, setRoleMode]);
 
   const handleRoleSwitch = (nextRole) => {
     setRole(nextRole);
-    setLinkSent(false);
   };
 
   const handleChange = (e) =>
     setForm({ ...form, [e.target.name]: e.target.value });
 
-  const sendMagicLink = async (e) => {
+  const loginWithPassword = async (e) => {
     e.preventDefault();
-    if (sendingLink) return;
+    if (loggingIn) return;
     const email = form.email.trim();
 
     try {
-      setSendingLink(true);
+      setLoggingIn(true);
       const payload = { email, password: form.password, role };
-      await api.post("/auth/send-link/login", payload);
-      setLinkSent(true);
-      showSnackbar("Check your email for a verification link.", "success");
+      const res = await api.post("/auth/login", payload);
+
+      const responseRole = String(res?.data?.user?.role || role).toUpperCase();
+      if (responseRole && responseRole !== role) {
+        showSnackbar("Please login from the correct portal", "error");
+        return;
+      }
+
+      localStorage.setItem("token", res.data.token);
+      localStorage.setItem("user", JSON.stringify(res.data.user));
+      setRoleMode(responseRole || role);
+      showSnackbar("Login successful.", "success");
+      navigate((responseRole || role) === "TEACHER" ? "/teacher/dashboard" : "/dashboard");
     } catch (err) {
-      const msg = err?.response?.data?.message || "Unable to send login link. Please check your details and try again.";
+      const msg = err?.response?.data?.message || "Login failed. Please check your details and try again.";
       showSnackbar(msg, "error");
     } finally {
-      setSendingLink(false);
+      setLoggingIn(false);
     }
   };
 
@@ -317,13 +329,13 @@ export default function Login() {
 
             <AnimatePresence mode="wait" initial={false}>
               <AnimatedRolePanel
-                key={`${mode}-${linkSent ? "sent" : "idle"}`}
+                key={`${mode}-direct-login`}
                 initial={{ opacity: 0, x: mode === "teacher" ? 16 : -16, scale: 0.98 }}
                 animate={{ opacity: 1, x: 0, scale: 1 }}
                 exit={{ opacity: 0, x: mode === "teacher" ? -16 : 16, scale: 0.98 }}
                 transition={{ duration: 0.3, ease: "easeInOut" }}
               >
-                <Form onSubmit={sendMagicLink}>
+                <Form onSubmit={loginWithPassword}>
                   <FieldWrapper>
                     <StyledInput
                       name="email"
@@ -346,22 +358,16 @@ export default function Login() {
                     <StyledLabel>Password</StyledLabel>
                   </FieldWrapper>
 
-                  <SubmitButton type="submit" disabled={sendingLink}>
-                    {sendingLink ? (
+                  <SubmitButton type="submit" disabled={loggingIn}>
+                    {loggingIn ? (
                       <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
                         <LoadingSpinner size={14} />
-                        Sending...
+                        Logging in...
                       </span>
-                    ) : linkSent ? "Resend Magic Link" : "Send Magic Link"}
+                    ) : "Login"}
                   </SubmitButton>
 
-                  {linkSent && (
-                    <p style={{ color: "#1d8f52", fontSize: "14px", textAlign: "center" }}>
-                      Check your email for a login verification link.
-                    </p>
-                  )}
-
-                  <GoogleAuthButton mode="login" selectedRole={role} disabled={sendingLink} />
+                  <GoogleAuthButton mode="login" selectedRole={role} disabled={loggingIn} />
                 </Form>
               </AnimatedRolePanel>
             </AnimatePresence>
