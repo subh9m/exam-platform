@@ -251,77 +251,43 @@ const AnimatedRolePanel = styled(motion.div)`
 `;
 
 export default function Register() {
-  const { theme, toggleTheme, setRoleMode } = useContext(ThemeContext);
+  const { theme, toggleTheme } = useContext(ThemeContext);
   const [role, setRole] = useState("STUDENT");
   const [form, setForm] = useState({ username: "", email: "", password: "" });
-  const [otp, setOtp] = useState("");
-  const [step, setStep] = useState(1);
-  const [sendingOtp, setSendingOtp] = useState(false);
-  const [verifyingOtp, setVerifyingOtp] = useState(false);
+  const [sendingLink, setSendingLink] = useState(false);
+  const [linkSent, setLinkSent] = useState(false);
   const mode = role === "TEACHER" ? "teacher" : "student";
   const navigate = useNavigate();
   const { showSnackbar } = useSnackbar();
 
   const handleRoleSwitch = (nextRole) => {
     setRole(nextRole);
-    setStep(1);
-    setOtp("");
+    setLinkSent(false);
   };
 
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
-  const sendOtp = async (e) => {
+  const sendMagicLink = async (e) => {
     e.preventDefault();
-    if (sendingOtp) return;
+    if (sendingLink) return;
     const email = form.email.trim();
 
     try {
-      setSendingOtp(true);
-      const payload = { email, role };
-      console.log("[Register] send OTP payload:", payload);
-      await api.post("/auth/send-otp/register", payload);
-
-      showSnackbar("OTP sent to your email.", "info");
-      setStep(2);
-    } catch (err) {
-      const msg = err?.response?.data?.message || "Unable to send OTP. Please check your details and try again.";
-      showSnackbar(msg, "error");
-    } finally {
-      setSendingOtp(false);
-    }
-  };
-
-
-  const verifyOtp = async (e) => {
-    e.preventDefault();
-    if (verifyingOtp) return;
-    const email = form.email.trim();
-    const trimmedOtp = otp.trim();
-
-    try {
-      setVerifyingOtp(true);
+      setSendingLink(true);
       const payload = {
         username: form.username,
         email,
         password: form.password,
-        otp: trimmedOtp,
         role,
       };
-      console.log("[Register] verify OTP payload:", payload);
-      const res = await api.post("/auth/verify-otp/register", payload);
-
-      // ✅ Store login session automatically
-      localStorage.setItem("token", res.data.token);
-      localStorage.setItem("user", JSON.stringify(res.data.user));
-      setRoleMode(String(res?.data?.user?.role || role).toUpperCase());
-
-      showSnackbar("OTP verified. Registration successful.", "info");
-      navigate(String(res?.data?.user?.role || role).toUpperCase() === "TEACHER" ? "/teacher/dashboard" : "/dashboard");
+      await api.post("/auth/send-link/register", payload);
+      setLinkSent(true);
+      showSnackbar("Check your email for a verification link.", "success");
     } catch (err) {
-      const msg = err?.response?.data?.message || "OTP verification failed. Please try again.";
+      const msg = err?.response?.data?.message || "Unable to send registration link. Please check your details and try again.";
       showSnackbar(msg, "error");
     } finally {
-      setVerifyingOtp(false);
+      setSendingLink(false);
     }
   };
 
@@ -358,81 +324,62 @@ export default function Register() {
 
             <AnimatePresence mode="wait" initial={false}>
               <AnimatedRolePanel
-                key={`${mode}-${step}`}
+                key={`${mode}-${linkSent ? "sent" : "idle"}`}
                 initial={{ opacity: 0, x: mode === "teacher" ? 16 : -16, scale: 0.98 }}
                 animate={{ opacity: 1, x: 0, scale: 1 }}
                 exit={{ opacity: 0, x: mode === "teacher" ? -16 : 16, scale: 0.98 }}
                 transition={{ duration: 0.3, ease: "easeInOut" }}
               >
-                {step === 1 && (
-                  <Form onSubmit={sendOtp}>
-                    <FieldWrapper>
-                      <StyledInput
-                        name="username"
-                        placeholder=" "
-                        onChange={handleChange}
-                        required
-                      />
-                      <StyledLabel>Username</StyledLabel>
-                    </FieldWrapper>
+                <Form onSubmit={sendMagicLink}>
+                  <FieldWrapper>
+                    <StyledInput
+                      name="username"
+                      placeholder=" "
+                      onChange={handleChange}
+                      required
+                    />
+                    <StyledLabel>Username</StyledLabel>
+                  </FieldWrapper>
 
-                    <FieldWrapper>
-                      <StyledInput
-                        name="email"
-                        type="email"
-                        placeholder=" "
-                        onChange={handleChange}
-                        required
-                      />
-                      <StyledLabel>Email</StyledLabel>
-                    </FieldWrapper>
+                  <FieldWrapper>
+                    <StyledInput
+                      name="email"
+                      type="email"
+                      placeholder=" "
+                      onChange={handleChange}
+                      required
+                    />
+                    <StyledLabel>Email</StyledLabel>
+                  </FieldWrapper>
 
-                    <FieldWrapper>
-                      <StyledInput
-                        name="password"
-                        type="password"
-                        placeholder=" "
-                        onChange={handleChange}
-                        required
-                      />
-                      <StyledLabel>Password</StyledLabel>
-                    </FieldWrapper>
+                  <FieldWrapper>
+                    <StyledInput
+                      name="password"
+                      type="password"
+                      placeholder=" "
+                      onChange={handleChange}
+                      required
+                    />
+                    <StyledLabel>Password</StyledLabel>
+                  </FieldWrapper>
 
-                    <SubmitButton type="submit" disabled={sendingOtp}>
-                      {sendingOtp ? (
-                        <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
-                          <LoadingSpinner size={14} />
-                          Sending...
-                        </span>
-                      ) : "Send OTP"}
-                    </SubmitButton>
+                  <SubmitButton type="submit" disabled={sendingLink}>
+                    {sendingLink ? (
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+                        <LoadingSpinner size={14} />
+                        Sending...
+                      </span>
+                    ) : linkSent ? "Resend Magic Link" : "Send Magic Link"}
+                  </SubmitButton>
 
-                    <GoogleAuthButton mode="register" selectedRole={role} disabled={sendingOtp || verifyingOtp} />
-                  </Form>
-                )}
+                  {linkSent && (
+                    <p style={{ color: "#1d8f52", fontSize: "14px", textAlign: "center" }}>
+                      Check your email for a registration verification link.
+                    </p>
+                  )}
 
-                {step === 2 && (
-                  <Form onSubmit={verifyOtp}>
-                    <FieldWrapper>
-                      <StyledInput
-                        name="otp"
-                        placeholder=" "
-                        onChange={(e) => setOtp(e.target.value)}
-                        required
-                      />
-                      <StyledLabel>Enter OTP</StyledLabel>
-                    </FieldWrapper>
-
-                    <SubmitButton type="submit" disabled={verifyingOtp}>
-                      {verifyingOtp ? (
-                        <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
-                          <LoadingSpinner size={14} />
-                          Verifying...
-                        </span>
-                      ) : "Verify & Create Account"}
-                    </SubmitButton>
-                  </Form>
-                )}
+                  <GoogleAuthButton mode="register" selectedRole={role} disabled={sendingLink} />
+                </Form>
               </AnimatedRolePanel>
             </AnimatePresence>
 

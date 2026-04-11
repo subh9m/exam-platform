@@ -15,6 +15,7 @@ import TeacherTestDetail from "./pages/TeacherTestDetail.jsx";
 import Results from "./pages/Results.jsx";
 import TeacherStudentResults from "./pages/TeacherStudentResults.jsx";
 import GoogleAuthCallback from "./pages/GoogleAuthCallback.jsx";
+import AuthVerify from "./pages/AuthVerify.jsx";
 import PageTransition from "./components/PageTransition.jsx";
 import { useSnackbar } from "./context/SnackbarContext.jsx";
 import { ThemeContext } from "./context/ThemeContext.jsx";
@@ -68,6 +69,7 @@ function AnimatedRoutes() {
       <Routes location={location} key={location.pathname}>
         <Route path="/" element={<PageTransition><Login /></PageTransition>} />
         <Route path="/register" element={<PageTransition><Register /></PageTransition>} />
+        <Route path="/auth/verify" element={<PageTransition><AuthVerify /></PageTransition>} />
         <Route path="/auth/google/callback" element={<PageTransition><GoogleAuthCallback /></PageTransition>} />
         <Route path="/dashboard" element={<PageTransition><RolePortalGuard requiredRole="STUDENT"><Dashboard /></RolePortalGuard></PageTransition>} />
         <Route path="/subject/:subject/tests" element={<PageTransition><SubjectTests /></PageTransition>} />
