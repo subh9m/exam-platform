@@ -48,6 +48,11 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll() // allow preflight
                 .requestMatchers("/health", "/actuator/health").permitAll()
+                .requestMatchers(HttpMethod.POST,
+                        "/api/auth/send-otp/register",
+                        "/api/auth/send-otp/login",
+                        "/api/auth/verify-otp/register",
+                        "/api/auth/verify-otp/login").permitAll()
                 .requestMatchers("/api/auth/send-otp/**", "/api/auth/verify-otp/**").permitAll()
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/oauth2/**", "/login/oauth2/**").permitAll()
