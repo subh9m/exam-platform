@@ -4,6 +4,7 @@ import styled, { keyframes, useTheme } from "styled-components";
 import Navbar from "../components/Navbar.jsx";
 import api from "../api/api.js";
 import { useLocation } from "react-router-dom";
+import { getCache, setCache } from "../utils/browserCache.js";
 
 // --- Animations ---
 const shimmer = keyframes`
@@ -136,6 +137,8 @@ const LoadingRow = styled.tr`
 // --- Component ---
 
 function Leaderboard() {
+  const LEADERBOARD_CACHE_TTL_MS = 60 * 1000;
+
   const theme = useTheme();
   const location = useLocation();
   const testId = new URLSearchParams(location.search).get("testId");
@@ -143,14 +146,39 @@ function Leaderboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let isCancelled = false;
     const endpoint = testId ? `/quiz/leaderboard?testId=${testId}` : "/quiz/leaderboard";
+    const cacheKey = `leaderboard:${testId || "all"}`;
+    const cachedLeaders = getCache(cacheKey, LEADERBOARD_CACHE_TTL_MS);
+
+    if (Array.isArray(cachedLeaders)) {
+      setLeaders(cachedLeaders);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
+
     api
       .get(endpoint)
       .then((res) => {
-        setLeaders(res.data || []);
+        if (isCancelled) {
+          return;
+        }
+        const nextLeaders = Array.isArray(res.data) ? res.data : [];
+        setLeaders(nextLeaders);
+        setCache(cacheKey, nextLeaders);
         setLoading(false);
       })
-      .catch(() => setLoading(false));
+      .catch(() => {
+        if (isCancelled) {
+          return;
+        }
+        setLoading(false);
+      });
+
+    return () => {
+      isCancelled = true;
+    };
   }, [testId]);
 
   return (

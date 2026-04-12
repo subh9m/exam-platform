@@ -7,6 +7,7 @@ import SubjectFab from "../components/SubjectFab.jsx";
 import api from "../api/api.js";
 import { useSnackbar } from "../context/SnackbarContext.jsx";
 import LoadingSpinner from "../components/LoadingSpinner.jsx";
+import { getCache, setCache } from "../utils/browserCache.js";
 
 const PageContainer = styled.div`
   min-height: 100vh;
@@ -128,6 +129,8 @@ function formatDate(value) {
 }
 
 function Results() {
+  const RESULTS_CACHE_TTL_MS = 90 * 1000;
+
   const navigate = useNavigate();
   const location = useLocation();
   const { showSnackbar } = useSnackbar();
@@ -141,6 +144,10 @@ function Results() {
   }, [rawUser]);
   const normalizedRole = String(user?.role || user?.userRole || "STUDENT").toUpperCase();
   const isTeacher = normalizedRole === "TEACHER";
+  const resultsCacheKey = useMemo(() => {
+    const userKey = String(user?.id || user?.email || user?.username || "anon").toLowerCase();
+    return `results:${isTeacher ? "teacher" : "student"}:${userKey}`;
+  }, [isTeacher, user?.email, user?.id, user?.username]);
 
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState([]);
@@ -148,8 +155,17 @@ function Results() {
   const [expandedStudentId, setExpandedStudentId] = useState(null);
 
   useEffect(() => {
+    let isCancelled = false;
+
     async function loadResults() {
-      setLoading(true);
+      const cachedRows = getCache(resultsCacheKey, RESULTS_CACHE_TTL_MS);
+      if (Array.isArray(cachedRows)) {
+        setRows(cachedRows);
+        setLoading(false);
+      } else {
+        setLoading(true);
+      }
+
       try {
         if (isTeacher) {
           const response = await api.get("/teacher/results");
@@ -161,7 +177,11 @@ function Results() {
             score: Number(entry.score || 0),
             totalQuestions: Number(entry.totalQuestions || 0),
           }));
+          if (isCancelled) {
+            return;
+          }
           setRows(mapped);
+          setCache(resultsCacheKey, mapped);
         } else {
           const response = await api.get("/quiz/my-results");
           const payload = Array.isArray(response.data) ? response.data : [];
@@ -173,18 +193,30 @@ function Results() {
             totalQuestions: Number(entry.totalQuestions || 0),
             createdAt: entry.createdAt || entry.dateTaken || null,
           }));
+          if (isCancelled) {
+            return;
+          }
           setRows(mapped);
+          setCache(resultsCacheKey, mapped);
         }
       } catch (err) {
-        setRows([]);
-        showSnackbar("Unable to load results right now.", "error");
+        if (!Array.isArray(cachedRows)) {
+          setRows([]);
+          showSnackbar("Unable to load results right now.", "error");
+        }
       } finally {
-        setLoading(false);
+        if (!isCancelled) {
+          setLoading(false);
+        }
       }
     }
 
     loadResults();
-  }, [isTeacher, showSnackbar]);
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [isTeacher, resultsCacheKey, showSnackbar]);
 
   const studentSubjectGroups = useMemo(() => {
     const grouped = {};

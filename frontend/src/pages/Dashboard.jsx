@@ -7,6 +7,7 @@ import Navbar from "../components/Navbar.jsx";
 import api from "../api/api.js";
 import { useSnackbar } from "../context/SnackbarContext.jsx";
 import LoadingSpinner from "../components/LoadingSpinner.jsx";
+import { getCache, removeCache, setCache } from "../utils/browserCache.js";
 
 // -------------------- STYLED COMPONENTS --------------------
 
@@ -143,6 +144,9 @@ const SecondaryButton = styled(motion.button)`
 // -------------------- MAIN COMPONENT --------------------
 
 function Dashboard() {
+  const SUBJECTS_CACHE_KEY = "subjects:list:v1";
+  const SUBJECTS_CACHE_TTL_MS = 2 * 60 * 1000;
+
   const navigate = useNavigate();
   const { showSnackbar } = useSnackbar();
   const [user, setUser] = useState(null);
@@ -168,14 +172,26 @@ function Dashboard() {
     }
   }, [isTeacher, navigate]);
 
-  const loadSubjects = async () => {
-    setLoadingSubjects(true);
+  const loadSubjects = async ({ forceRefresh = false } = {}) => {
+    const cachedSubjects = forceRefresh ? null : getCache(SUBJECTS_CACHE_KEY, SUBJECTS_CACHE_TTL_MS);
+
+    if (Array.isArray(cachedSubjects)) {
+      setSubjects(cachedSubjects);
+      setLoadingSubjects(false);
+    } else {
+      setLoadingSubjects(true);
+    }
+
     try {
       const res = await api.get("/subjects");
-      setSubjects(Array.isArray(res.data) ? res.data : []);
+      const nextSubjects = Array.isArray(res.data) ? res.data : [];
+      setSubjects(nextSubjects);
+      setCache(SUBJECTS_CACHE_KEY, nextSubjects);
     } catch (err) {
-      setSubjects([]);
-      showSnackbar("Unable to load subjects right now.", "error");
+      if (!Array.isArray(cachedSubjects)) {
+        setSubjects([]);
+        showSnackbar("Unable to load subjects right now.", "error");
+      }
     } finally {
       setLoadingSubjects(false);
     }
@@ -183,7 +199,10 @@ function Dashboard() {
 
   useEffect(() => {
     loadSubjects();
-    const onSubjectsUpdated = () => loadSubjects();
+    const onSubjectsUpdated = () => {
+      removeCache(SUBJECTS_CACHE_KEY);
+      loadSubjects({ forceRefresh: true });
+    };
     window.addEventListener("subjects-updated", onSubjectsUpdated);
     return () => window.removeEventListener("subjects-updated", onSubjectsUpdated);
   }, []);
