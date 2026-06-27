@@ -13,6 +13,9 @@ import java.util.List;
 public class PresenceMessage {
     private String roomCode;
     private List<String> participantUsernames;
+    private int activeParticipantCount;
+    private int maxParticipants;
     private String joinedUser;
     private String leftUser;
+    private String type; // "join" or "leave"
 }

@@ -1,5 +1,6 @@
 package com.examplatform.collab.service;
 
+import com.examplatform.collab.config.CollabProperties;
 import com.examplatform.collab.model.CollabRoom;
 import com.examplatform.collab.repository.CollabRoomRepository;
 import org.slf4j.Logger;
@@ -19,13 +20,19 @@ public class CollabRoomService {
     private static final Logger log = LoggerFactory.getLogger(CollabRoomService.class);
     
     private final CollabRoomRepository roomRepository;
+    private final CollabProperties collabProperties;
     private final SecureRandom random = new SecureRandom();
     private static final String CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     private static final int CODE_LENGTH = 4;
     private static final long INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 
-    public CollabRoomService(CollabRoomRepository roomRepository) {
+    public CollabRoomService(CollabRoomRepository roomRepository, CollabProperties collabProperties) {
         this.roomRepository = roomRepository;
+        this.collabProperties = collabProperties;
+    }
+
+    public int getMaxParticipants() {
+        return collabProperties.getMaxParticipants();
     }
 
     public CollabRoom createRoom(String creatorId, String creatorUsername) {
@@ -37,6 +44,7 @@ public class CollabRoomService {
         CollabRoom room = CollabRoom.builder()
                 .roomCode(roomCode)
                 .creatorId(creatorId)
+                .creatorUsername(creatorUsername)
                 .participantUsernames(participants)
                 .code("// Welcome to Collab Code!\n// Start coding here...\n")
                 .language("javascript")
@@ -59,9 +67,10 @@ public class CollabRoomService {
             return roomRepository.save(room);
         }
 
-        // If the room has 2 or more participants, check if we can join
-        if (room.getParticipantUsernames().size() >= 2) {
-            throw new IllegalStateException("Room is full");
+        // If the room has reached the configured max, reject
+        int max = collabProperties.getMaxParticipants();
+        if (room.getParticipantUsernames().size() >= max) {
+            throw new IllegalStateException("Room is full (max " + max + " participants)");
         }
 
         room.getParticipantUsernames().add(username);
@@ -110,6 +119,14 @@ public class CollabRoomService {
             }
         }
         return null;
+    }
+
+    /**
+     * Find all rooms where a given username is a participant.
+     * Used by the WebSocket disconnect listener to clean up ghost users.
+     */
+    public List<CollabRoom> findRoomsByParticipant(String username) {
+        return roomRepository.findByParticipantUsernamesContaining(username);
     }
 
     @Scheduled(fixedRate = 60000) // Run every minute

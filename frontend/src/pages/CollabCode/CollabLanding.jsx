@@ -236,7 +236,7 @@ export default function CollabLanding() {
               <CardIcon>🚀</CardIcon>
               <CardTitle>Create Room</CardTitle>
               <CardDescription>
-                Start a new real-time collaborative session. You will receive a unique 4-digit code to share with another developer.
+                Start a new real-time collaborative session. You will receive a unique 4-digit code to share with up to 4 other developers.
               </CardDescription>
             </CardHeader>
             <PrimaryButton

@@ -13,4 +13,5 @@ public interface CollabRoomRepository extends MongoRepository<CollabRoom, String
     Optional<CollabRoom> findByRoomCode(String roomCode);
     boolean existsByRoomCode(String roomCode);
     List<CollabRoom> findByLastActivityTimeBefore(Date timeout);
+    List<CollabRoom> findByParticipantUsernamesContaining(String username);
 }

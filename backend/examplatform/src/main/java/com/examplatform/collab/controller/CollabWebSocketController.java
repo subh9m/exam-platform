@@ -1,5 +1,6 @@
 package com.examplatform.collab.controller;
 
+import com.examplatform.collab.config.CollabProperties;
 import com.examplatform.collab.dto.*;
 import com.examplatform.collab.model.CollabRoom;
 import com.examplatform.collab.service.CollabRoomService;
@@ -23,13 +24,16 @@ public class CollabWebSocketController {
     private static final Logger log = LoggerFactory.getLogger(CollabWebSocketController.class);
 
     private final CollabRoomService collabRoomService;
+    private final CollabProperties collabProperties;
     private final UserService userService;
     private final SimpMessagingTemplate messagingTemplate;
 
     public CollabWebSocketController(CollabRoomService collabRoomService,
+                                     CollabProperties collabProperties,
                                      UserService userService,
                                      SimpMessagingTemplate messagingTemplate) {
         this.collabRoomService = collabRoomService;
+        this.collabProperties = collabProperties;
         this.userService = userService;
         this.messagingTemplate = messagingTemplate;
     }
@@ -55,7 +59,10 @@ public class CollabWebSocketController {
                 PresenceMessage.builder()
                         .roomCode(roomCode)
                         .participantUsernames(room.getParticipantUsernames())
+                        .activeParticipantCount(room.getParticipantUsernames().size())
+                        .maxParticipants(collabProperties.getMaxParticipants())
                         .joinedUser(user.getUsername())
+                        .type("join")
                         .build()
         );
     }
@@ -129,7 +136,10 @@ public class CollabWebSocketController {
                 PresenceMessage.builder()
                         .roomCode(roomCode)
                         .participantUsernames(activeUsers)
+                        .activeParticipantCount(activeUsers.size())
+                        .maxParticipants(collabProperties.getMaxParticipants())
                         .leftUser(user.getUsername())
+                        .type("leave")
                         .build()
         );
     }

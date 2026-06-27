@@ -159,6 +159,22 @@ const UserItem = styled.div`
   margin-bottom: 6px;
 `;
 
+const UserLeftSide = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+`;
+
+const UserStatusDot = styled.span`
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: ${({ color }) => color || "#22c55e"};
+  display: inline-block;
+  box-shadow: 0 0 6px ${({ color }) => color || "#22c55e"};
+  flex-shrink: 0;
+`;
+
 const UserLabel = styled.span`
   font-weight: 600;
   font-size: 14px;
@@ -173,6 +189,27 @@ const UserBadge = styled.span`
   color: ${({ type, theme }) => (type === "owner" ? theme.roleAccent : theme.cardText)};
   padding: 2px 6px;
   border-radius: 4px;
+`;
+
+const ParticipantCounter = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid ${({ theme }) => theme.borderColor};
+  font-size: 13px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.cardText};
+`;
+
+const CountBadge = styled.span`
+  background: ${({ theme }) => theme.roleAccent + "1a"};
+  color: ${({ theme }) => theme.roleAccent};
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-weight: 700;
+  font-size: 13px;
 `;
 
 const SelectField = styled.select`
@@ -263,6 +300,17 @@ const PulseRing = styled.div`
   }
 `;
 
+// -------------------- CONSTANTS --------------------
+
+// Cursor colors for multi-user support (up to 5 distinct colors)
+const CURSOR_COLORS = [
+  "#ef4444", // red
+  "#3b82f6", // blue
+  "#22c55e", // green
+  "#f97316", // orange
+  "#a855f7", // purple
+];
+
 // Helper to resolve WS protocol and host
 const getWsUrl = () => {
   const rawApiBaseUrl = (import.meta.env.VITE_API_BASE_URL || "http://localhost:8080/api").trim();
@@ -277,22 +325,29 @@ const getWsUrl = () => {
   }
 };
 
-// Injection of remote cursor styling
-const injectStyles = () => {
+// Injection of remote cursor styling for multiple users
+const injectCursorStyles = () => {
   const styleId = "remote-cursor-styles";
   if (document.getElementById(styleId)) return;
   const style = document.createElement("style");
   style.id = styleId;
-  style.textContent = `
-    .remote-cursor-decoration {
-      border-left: 2px solid #ef4444;
-      margin-left: -1px;
-      animation: remote-cursor-blink 1s infinite;
-    }
+
+  let css = "";
+  CURSOR_COLORS.forEach((color, idx) => {
+    css += `
+      .remote-cursor-${idx} {
+        border-left: 2px solid ${color};
+        margin-left: -1px;
+        animation: remote-cursor-blink 1s infinite;
+      }
+    `;
+  });
+  css += `
     @keyframes remote-cursor-blink {
       50% { opacity: 0; }
     }
   `;
+  style.textContent = css;
   document.head.appendChild(style);
 };
 
@@ -327,17 +382,21 @@ export default function CollabRoom() {
   const [initialCode, setInitialCode] = useState("");
   const [language, setLanguage] = useState("javascript");
   const [participants, setParticipants] = useState([]);
-  const [remoteTyping, setRemoteTyping] = useState(null);
+  const [maxParticipants, setMaxParticipants] = useState(5);
+  const [creatorUsername, setCreatorUsername] = useState(null);
+  const [typingUsers, setTypingUsers] = useState(new Set());
 
   const editorRef = useRef(null);
   const monacoRef = useRef(null);
   const clientRef = useRef(null);
   
   const decorationsRef = useRef([]);
+  const remoteCursorsRef = useRef({}); // Map<username, {line, col}>
   const isTypingRef = useRef(false);
   
   const typingTimeoutRef = useRef(null);
   const saveTimeoutRef = useRef(null);
+  const typingClearTimeoutsRef = useRef({}); // Map<username, timeoutId>
 
   // References to model listeners to dispose them cleanly
   const cursorListenerRef = useRef(null);
@@ -357,9 +416,15 @@ export default function CollabRoom() {
 
   const isAlone = participants.length <= 1;
 
+  // Get cursor color index for a participant (based on their position in participant list)
+  const getCursorColorIndex = (username) => {
+    const idx = participants.indexOf(username);
+    return idx >= 0 ? idx % CURSOR_COLORS.length : 0;
+  };
+
   useEffect(() => {
     let isMounted = true;
-    injectStyles();
+    injectCursorStyles();
 
     // Initialize Yjs Document and Text type
     const doc = new Y.Doc();
@@ -372,10 +437,12 @@ export default function CollabRoom() {
         const res = await api.get(`/collab/room/${roomCode}`);
         if (!isMounted) return;
 
-        const { code, language: roomLang, participantUsernames } = res.data;
+        const { code, language: roomLang, participantUsernames, maxParticipants: maxP, creatorUsername: creator } = res.data;
         setLanguage(roomLang);
         setParticipants(participantUsernames);
         setInitialCode(code);
+        if (maxP) setMaxParticipants(maxP);
+        if (creator) setCreatorUsername(creator);
 
         // If we are alone in the room, populate Yjs text with database value.
         // Otherwise, Yjs text starts empty and synchronizes from the active client.
@@ -446,6 +513,9 @@ export default function CollabRoom() {
         cursorListenerRef.current.dispose();
       }
 
+      // Clear all typing timeouts
+      Object.values(typingClearTimeoutsRef.current).forEach(clearTimeout);
+      typingClearTimeoutsRef.current = {};
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
@@ -506,17 +576,27 @@ export default function CollabRoom() {
       stompClient.subscribe(`/topic/room/${roomCode}/presence`, (message) => {
         const body = JSON.parse(message.body);
         setParticipants(body.participantUsernames);
+        
+        if (body.maxParticipants) {
+          setMaxParticipants(body.maxParticipants);
+        }
 
-        const isSelf = body.joinedUser && currentUser?.username &&
+        const isSelfJoin = body.joinedUser && currentUser?.username &&
           body.joinedUser.trim().toLowerCase() === currentUser.username.trim().toLowerCase();
 
-        if (body.joinedUser && !isSelf) {
+        if (body.joinedUser && !isSelfJoin) {
           showSnackbar(`${body.joinedUser} joined the room.`, "info");
         }
         if (body.leftUser && body.leftUser !== currentUser?.username) {
           showSnackbar(`${body.leftUser} left the room.`, "warning");
-          clearRemoteDecorations();
-          setRemoteTyping(null);
+          // Clean up cursor for the user who left
+          removeRemoteCursor(body.leftUser);
+          // Remove from typing set
+          setTypingUsers((prev) => {
+            const next = new Set(prev);
+            next.delete(body.leftUser);
+            return next;
+          });
         }
       });
 
@@ -529,7 +609,12 @@ export default function CollabRoom() {
           
         if (isSelf) return;
 
-        drawRemoteCursor(body.lineNumber, body.column);
+        // Track cursor position per user
+        remoteCursorsRef.current[body.senderUsername] = {
+          line: body.lineNumber,
+          col: body.column,
+        };
+        drawAllRemoteCursors();
       });
 
       // Subscribe to programming language change
@@ -553,7 +638,35 @@ export default function CollabRoom() {
           body.senderUsername.trim().toLowerCase() === currentUser.username.trim().toLowerCase();
           
         if (isSelf) return;
-        setRemoteTyping(body.typing ? body.senderUsername : null);
+
+        if (body.typing) {
+          setTypingUsers((prev) => {
+            const next = new Set(prev);
+            next.add(body.senderUsername);
+            return next;
+          });
+
+          // Auto-clear after 2 seconds if no further typing messages
+          if (typingClearTimeoutsRef.current[body.senderUsername]) {
+            clearTimeout(typingClearTimeoutsRef.current[body.senderUsername]);
+          }
+          typingClearTimeoutsRef.current[body.senderUsername] = setTimeout(() => {
+            setTypingUsers((prev) => {
+              const next = new Set(prev);
+              next.delete(body.senderUsername);
+              return next;
+            });
+          }, 2000);
+        } else {
+          setTypingUsers((prev) => {
+            const next = new Set(prev);
+            next.delete(body.senderUsername);
+            return next;
+          });
+          if (typingClearTimeoutsRef.current[body.senderUsername]) {
+            clearTimeout(typingClearTimeoutsRef.current[body.senderUsername]);
+          }
+        }
       });
 
       // Trigger Yjs Synchronization Handshake (Step 1: Broadcast local state vector)
@@ -592,30 +705,31 @@ export default function CollabRoom() {
     clientRef.current = stompClient;
   };
 
-  // Visual overlay for remote user's cursor
-  const drawRemoteCursor = (line, col) => {
+  // Draw cursors for all remote users simultaneously
+  const drawAllRemoteCursors = () => {
     const editor = editorRef.current;
     const monaco = monacoRef.current;
     if (!editor || !monaco) return;
 
-    const newDecorations = [
-      {
-        range: new monaco.Range(line, col, line, col),
+    const newDecorations = [];
+    Object.entries(remoteCursorsRef.current).forEach(([username, pos]) => {
+      const colorIdx = getCursorColorIndex(username);
+      newDecorations.push({
+        range: new monaco.Range(pos.line, pos.col, pos.line, pos.col),
         options: {
-          className: "remote-cursor-decoration",
+          className: `remote-cursor-${colorIdx}`,
           isWholeLine: false
         }
-      }
-    ];
+      });
+    });
 
     decorationsRef.current = editor.deltaDecorations(decorationsRef.current, newDecorations);
   };
 
-  const clearRemoteDecorations = () => {
-    const editor = editorRef.current;
-    if (editor && decorationsRef.current.length > 0) {
-      decorationsRef.current = editor.deltaDecorations(decorationsRef.current, []);
-    }
+  // Remove a specific remote user's cursor
+  const removeRemoteCursor = (username) => {
+    delete remoteCursorsRef.current[username];
+    drawAllRemoteCursors();
   };
 
   // Handle Monaco Editor load
@@ -717,6 +831,15 @@ export default function CollabRoom() {
     showSnackbar("Room code copied to clipboard!", "success");
   };
 
+  // Build typing notice text
+  const typingNoticeText = (() => {
+    const names = [...typingUsers];
+    if (names.length === 0) return "";
+    if (names.length === 1) return `${names[0]} is typing...`;
+    if (names.length === 2) return `${names[0]} and ${names[1]} are typing...`;
+    return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]} are typing...`;
+  })();
+
   if (loading) {
     return (
       <PageContainer style={{ justifyContent: "center", alignItems: "center" }}>
@@ -741,9 +864,9 @@ export default function CollabRoom() {
               >
                 <WaitingCard>
                   <PulseRing>⏳</PulseRing>
-                  <Title style={{ fontSize: "20px", marginBottom: "4px" }}>Waiting for Partner</Title>
+                  <Title style={{ fontSize: "20px", marginBottom: "4px" }}>Waiting for Participants</Title>
                   <p style={{ fontSize: "14px", color: "gray", margin: "0 0 10px 0" }}>
-                    Share this room code with another student or teacher to start collaborating.
+                    Share this room code with other collaborators to start coding together (up to {maxParticipants} participants).
                   </p>
                   <RoomCodeContainer>
                     <CodeBadge>{roomCode}</CodeBadge>
@@ -796,12 +919,17 @@ export default function CollabRoom() {
           <SidebarCard>
             <Title>Participants</Title>
             <div>
-              {participants.map((username, idx) => {
+              {participants.map((username) => {
                 const isSelf = username === currentUser?.username;
-                const isOwner = idx === 0;
+                const isOwner = creatorUsername ? username === creatorUsername : participants.indexOf(username) === 0;
+                const colorIdx = participants.indexOf(username) % CURSOR_COLORS.length;
+                const cursorColor = CURSOR_COLORS[colorIdx];
                 return (
                   <UserItem key={username} isSelf={isSelf}>
-                    <UserLabel>{username} {isSelf && "(You)"}</UserLabel>
+                    <UserLeftSide>
+                      <UserStatusDot color={cursorColor} />
+                      <UserLabel>{username} {isSelf && "(You)"}</UserLabel>
+                    </UserLeftSide>
                     <UserBadge type={isOwner ? "owner" : "member"}>
                       {isOwner ? "Host" : "Guest"}
                     </UserBadge>
@@ -809,8 +937,12 @@ export default function CollabRoom() {
                 );
               })}
             </div>
+            <ParticipantCounter>
+              <span>Connected</span>
+              <CountBadge>{participants.length} / {maxParticipants}</CountBadge>
+            </ParticipantCounter>
             <TypingNotice>
-              {remoteTyping ? `${remoteTyping} is typing...` : ""}
+              {typingNoticeText}
             </TypingNotice>
           </SidebarCard>
 

@@ -25,8 +25,10 @@ public class CollabRoom {
     
     private String creatorId; // User ID of creator
 
+    private String creatorUsername; // Username of the room creator (owner)
+
     @Builder.Default
-    private List<String> participantUsernames = new ArrayList<>(); // Usernames in the room (max 2)
+    private List<String> participantUsernames = new ArrayList<>(); // Usernames currently in the room
 
     @Builder.Default
     private String code = ""; // Current code contents in the editor
