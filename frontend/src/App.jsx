@@ -19,6 +19,9 @@ import PageTransition from "./components/PageTransition.jsx";
 import { useSnackbar } from "./context/SnackbarContext.jsx";
 import { ThemeContext } from "./context/ThemeContext.jsx";
 
+import CollabLanding from "./pages/CollabCode/CollabLanding.jsx";
+import CollabRoom from "./pages/CollabCode/CollabRoom.jsx";
+
 function normalizeRole(value) {
   return String(value || "").trim().toUpperCase();
 }
@@ -59,6 +62,18 @@ function RolePortalGuard({ requiredRole, children }) {
   return children;
 }
 
+function AuthGuard({ children }) {
+  const location = useLocation();
+  const user = getStoredUser();
+  const token = localStorage.getItem("token");
+
+  if (!user || !token) {
+    return <Navigate to="/" replace state={{ from: location.pathname }} />;
+  }
+
+  return children;
+}
+
 
 function AnimatedRoutes() {
   const location = useLocation();
@@ -81,6 +96,8 @@ function AnimatedRoutes() {
         <Route path="/teacher/subject/:subject" element={<PageTransition><RolePortalGuard requiredRole="TEACHER"><TeacherSubject /></RolePortalGuard></PageTransition>} />
         <Route path="/teacher/test/:testId" element={<PageTransition><RolePortalGuard requiredRole="TEACHER"><TeacherTestDetail /></RolePortalGuard></PageTransition>} />
         <Route path="/teacher/results" element={<PageTransition><RolePortalGuard requiredRole="TEACHER"><Results /></RolePortalGuard></PageTransition>} />
+        <Route path="/collab" element={<PageTransition><AuthGuard><CollabLanding /></AuthGuard></PageTransition>} />
+        <Route path="/collab/room/:roomCode" element={<PageTransition><AuthGuard><CollabRoom /></AuthGuard></PageTransition>} />
       </Routes>
     </AnimatePresence>
   );

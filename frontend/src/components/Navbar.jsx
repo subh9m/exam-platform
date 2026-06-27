@@ -365,12 +365,14 @@ function Navbar() {
           {isTeacher ? (
             <>
               <StyledLink to="/teacher/dashboard">Teacher Dashboard</StyledLink>
+              <StyledLink to="/collab">Collab Code</StyledLink>
               <StyledLink to="/results">Results</StyledLink>
             </>
           ) : (
             <>
               <StyledLink to="/dashboard">Dashboard</StyledLink>
               <StyledLink to="/leaderboard">Leaderboard</StyledLink>
+              <StyledLink to="/collab">Collab Code</StyledLink>
               <StyledLink to="/results">Results</StyledLink>
             </>
           )}
