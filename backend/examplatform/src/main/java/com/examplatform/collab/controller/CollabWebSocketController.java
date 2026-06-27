@@ -76,6 +76,15 @@ public class CollabWebSocketController {
         }
     }
 
+    @MessageMapping("/room/{roomCode}/yjs")
+    public void handleYjsMessage(@DestinationVariable String roomCode, com.examplatform.collab.dto.YjsMessage message, Principal principal) {
+        User user = getUser(principal);
+        if (user == null) return;
+
+        message.setSenderUsername(user.getUsername());
+        messagingTemplate.convertAndSend("/topic/room/" + roomCode + "/yjs", message);
+    }
+
     @MessageMapping("/room/{roomCode}/cursor-update")
     public void handleCursorUpdate(@DestinationVariable String roomCode, CursorUpdateMessage message, Principal principal) {
         User user = getUser(principal);

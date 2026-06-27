@@ -10,6 +10,8 @@ import { useSnackbar } from "../../context/SnackbarContext.jsx";
 import LoadingSpinner from "../../components/LoadingSpinner.jsx";
 import { ThemeContext } from "../../context/ThemeContext.jsx";
 import { Client } from "@stomp/stompjs";
+import * as Y from "yjs";
+import { MonacoBinding } from "y-monaco";
 
 // -------------------- STYLED COMPONENTS --------------------
 
@@ -294,6 +296,26 @@ const injectStyles = () => {
   document.head.appendChild(style);
 };
 
+// Base64 conversion helpers for Yjs binary updates
+const arrayToBase64 = (uint8Array) => {
+  let binary = "";
+  const len = uint8Array.byteLength;
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(uint8Array[i]);
+  }
+  return window.btoa(binary);
+};
+
+const base64ToArray = (base64) => {
+  const binaryString = window.atob(base64);
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes;
+};
+
 export default function CollabRoom() {
   const { roomCode } = useParams();
   const navigate = useNavigate();
@@ -312,15 +334,18 @@ export default function CollabRoom() {
   const clientRef = useRef(null);
   
   const decorationsRef = useRef([]);
-  const isApplyingSyncRef = useRef(false);
   const isTypingRef = useRef(false);
   
   const typingTimeoutRef = useRef(null);
   const saveTimeoutRef = useRef(null);
 
-  // References to model listeners to dispose them cleanly and prevent duplication
-  const modelContentListenerRef = useRef(null);
+  // References to model listeners to dispose them cleanly
   const cursorListenerRef = useRef(null);
+
+  // Yjs document references
+  const yDocRef = useRef(null);
+  const yTextRef = useRef(null);
+  const bindingRef = useRef(null);
 
   // Retrieve current user
   let currentUser = null;
@@ -330,12 +355,17 @@ export default function CollabRoom() {
     currentUser = null;
   }
 
-  const isRoomFull = participants.length >= 2;
   const isAlone = participants.length <= 1;
 
   useEffect(() => {
     let isMounted = true;
     injectStyles();
+
+    // Initialize Yjs Document and Text type
+    const doc = new Y.Doc();
+    const text = doc.getText("monaco");
+    yDocRef.current = doc;
+    yTextRef.current = text;
     
     const fetchRoomState = async () => {
       try {
@@ -346,8 +376,14 @@ export default function CollabRoom() {
         setLanguage(roomLang);
         setParticipants(participantUsernames);
         setInitialCode(code);
+
+        // If we are the first user joining, initialize Yjs text with database value
+        const isFirstUser = participantUsernames.length === 0;
+        if (isFirstUser) {
+          text.insert(0, code);
+        }
+
         setLoading(false);
-        
         initializeWebSocket();
       } catch (err) {
         if (!isMounted) return;
@@ -358,6 +394,27 @@ export default function CollabRoom() {
     };
 
     fetchRoomState();
+
+    // Setup local Yjs update events broadcasting
+    doc.on("update", (update, origin) => {
+      if (origin === "remote") return;
+
+      const base64Update = arrayToBase64(update);
+      if (clientRef.current && clientRef.current.connected) {
+        clientRef.current.publish({
+          destination: `/app/room/${roomCode}/yjs`,
+          body: JSON.stringify({
+            roomCode,
+            type: "update",
+            payload: base64Update
+          })
+        });
+      }
+
+      // Trigger debounced snapshot save
+      triggerDebouncedSave(text.toString());
+      sendTypingState(true);
+    });
 
     return () => {
       isMounted = false;
@@ -373,10 +430,17 @@ export default function CollabRoom() {
         clientRef.current = null;
       }
       
-      // Clean up Monaco listeners
-      if (modelContentListenerRef.current) {
-        modelContentListenerRef.current.dispose();
+      // Clean up Yjs binding and document
+      if (bindingRef.current) {
+        bindingRef.current.destroy();
+        bindingRef.current = null;
       }
+      if (yDocRef.current) {
+        yDocRef.current.destroy();
+        yDocRef.current = null;
+      }
+
+      // Clean up Monaco listeners
       if (cursorListenerRef.current) {
         cursorListenerRef.current.dispose();
       }
@@ -386,29 +450,7 @@ export default function CollabRoom() {
     };
   }, [roomCode]);
 
-  const syncEditorWithServer = async () => {
-    try {
-      const res = await api.get(`/collab/room/${roomCode}`);
-      const { code, language: roomLang } = res.data;
-      setLanguage(roomLang);
-      
-      const editor = editorRef.current;
-      if (editor && editor.getValue() !== code) {
-        isApplyingSyncRef.current = true;
-        const selection = editor.getSelection();
-        editor.setValue(code);
-        if (selection) {
-          editor.setSelection(selection);
-        }
-        isApplyingSyncRef.current = false;
-      }
-    } catch (err) {
-      console.error("Failed to sync editor on reconnect:", err);
-    }
-  };
-
   const initializeWebSocket = () => {
-    // If a connection already exists, don't re-create it
     if (clientRef.current) return;
 
     const wsUrl = getWsUrl();
@@ -427,10 +469,37 @@ export default function CollabRoom() {
     stompClient.onConnect = (frame) => {
       setConnected(true);
 
-      // Sync editor state from database on reconnect to recover connection gaps
-      if (editorRef.current) {
-        syncEditorWithServer();
-      }
+      // Subscribe to Yjs updates topic
+      stompClient.subscribe(`/topic/room/${roomCode}/yjs`, (message) => {
+        const body = JSON.parse(message.body);
+        
+        const isSelf = body.senderUsername && currentUser?.username &&
+          body.senderUsername.trim().toLowerCase() === currentUser.username.trim().toLowerCase();
+        
+        if (isSelf) return;
+
+        if (body.type === "sync-step-1") {
+          // Send local delta back to joining client
+          const remoteStateVector = base64ToArray(body.payload);
+          const difference = Y.encodeStateAsUpdate(yDocRef.current, remoteStateVector);
+          const base64Difference = arrayToBase64(difference);
+
+          stompClient.publish({
+            destination: `/app/room/${roomCode}/yjs`,
+            body: JSON.stringify({
+              roomCode,
+              type: "sync-step-2",
+              payload: base64Difference
+            })
+          });
+        } else if (body.type === "sync-step-2") {
+          const update = base64ToArray(body.payload);
+          Y.applyUpdate(yDocRef.current, update, "remote");
+        } else if (body.type === "update") {
+          const update = base64ToArray(body.payload);
+          Y.applyUpdate(yDocRef.current, update, "remote");
+        }
+      });
 
       // Subscribe to presence list changes
       stompClient.subscribe(`/topic/room/${roomCode}/presence`, (message) => {
@@ -447,21 +516,6 @@ export default function CollabRoom() {
           showSnackbar(`${body.leftUser} left the room.`, "warning");
           clearRemoteDecorations();
           setRemoteTyping(null);
-        }
-      });
-
-      // Subscribe to code updates (character insertions/deletions)
-      stompClient.subscribe(`/topic/room/${roomCode}/code-update`, (message) => {
-        const body = JSON.parse(message.body);
-        
-        // Strict case-insensitive self check to prevent handling and looping our own edits
-        const isSelf = body.senderUsername && currentUser?.username &&
-          body.senderUsername.trim().toLowerCase() === currentUser.username.trim().toLowerCase();
-        
-        if (isSelf) return;
-
-        if (body.changes) {
-          applyRemoteChanges(body.changes);
         }
       });
 
@@ -501,6 +555,19 @@ export default function CollabRoom() {
         setRemoteTyping(body.typing ? body.senderUsername : null);
       });
 
+      // Trigger Yjs Synchronization Handshake (Step 1: Broadcast local state vector)
+      const stateVector = Y.encodeStateVector(yDocRef.current);
+      const base64StateVector = arrayToBase64(stateVector);
+
+      stompClient.publish({
+        destination: `/app/room/${roomCode}/yjs`,
+        body: JSON.stringify({
+          roomCode,
+          type: "sync-step-1",
+          payload: base64StateVector
+        })
+      });
+
       // Publish join notice
       stompClient.publish({
         destination: `/app/room/${roomCode}/join`
@@ -522,27 +589,6 @@ export default function CollabRoom() {
 
     stompClient.activate();
     clientRef.current = stompClient;
-  };
-
-  // Applying keystrokes from other user programmatically
-  const applyRemoteChanges = (changes) => {
-    const editor = editorRef.current;
-    if (!editor) return;
-
-    isApplyingSyncRef.current = true;
-    const edits = changes.map(change => ({
-      range: {
-        startLineNumber: change.range.startLineNumber,
-        startColumn: change.range.startColumn,
-        endLineNumber: change.range.endLineNumber,
-        endColumn: change.range.endColumn
-      },
-      text: change.text,
-      forceMoveMarkers: true
-    }));
-
-    editor.executeEdits("collab-sync", edits);
-    isApplyingSyncRef.current = false;
   };
 
   // Visual overlay for remote user's cursor
@@ -576,35 +622,23 @@ export default function CollabRoom() {
     editorRef.current = editor;
     monacoRef.current = monaco;
 
-    // Clean up any stale listeners to prevent duplications
-    if (modelContentListenerRef.current) {
-      modelContentListenerRef.current.dispose();
+    // Destroy any existing binding
+    if (bindingRef.current) {
+      bindingRef.current.destroy();
     }
+
+    // Bind Yjs document text to Monaco editor model
+    bindingRef.current = new MonacoBinding(
+      yTextRef.current,
+      editor.getModel(),
+      new Set([editor]),
+      null
+    );
+
+    // Clean up any stale listeners to prevent duplications
     if (cursorListenerRef.current) {
       cursorListenerRef.current.dispose();
     }
-
-    // Listen to local typing updates
-    modelContentListenerRef.current = editor.onDidChangeModelContent((event) => {
-      if (isApplyingSyncRef.current) return;
-
-      // Broadcast changes to WS
-      if (clientRef.current && clientRef.current.connected) {
-        clientRef.current.publish({
-          destination: `/app/room/${roomCode}/code-update`,
-          body: JSON.stringify({
-            roomCode,
-            changes: event.changes
-          })
-        });
-      }
-
-      // Schedule full-code database snapshot
-      triggerDebouncedSave(editor.getValue());
-
-      // Trigger typing status update
-      sendTypingState(true);
-    });
 
     // Listen to local cursor movement
     cursorListenerRef.current = editor.onDidChangeCursorPosition((event) => {
@@ -644,6 +678,7 @@ export default function CollabRoom() {
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(() => {
       if (clientRef.current && clientRef.current.connected) {
+        // Broadcast snap to update plain text database representation
         clientRef.current.publish({
           destination: `/app/room/${roomCode}/code-update`,
           body: JSON.stringify({
