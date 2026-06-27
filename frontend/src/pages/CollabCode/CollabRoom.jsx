@@ -377,9 +377,10 @@ export default function CollabRoom() {
         setParticipants(participantUsernames);
         setInitialCode(code);
 
-        // If we are the first user joining, initialize Yjs text with database value
-        const isFirstUser = participantUsernames.length === 0;
-        if (isFirstUser) {
+        // If we are alone in the room, populate Yjs text with database value.
+        // Otherwise, Yjs text starts empty and synchronizes from the active client.
+        const isAloneInRoom = participantUsernames.length <= 1;
+        if (isAloneInRoom) {
           text.insert(0, code);
         }
 
@@ -772,7 +773,7 @@ export default function CollabRoom() {
               defaultLanguage="javascript"
               language={language}
               theme="vs-dark"
-              defaultValue={initialCode}
+              defaultValue=""
               onMount={handleEditorMount}
               options={{
                 fontSize: 14,
